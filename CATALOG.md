@@ -4,6 +4,23 @@ Generated from `src/intent_analyst/catalog.py` by `uv run python -m intent_analy
 A test fails if this file is stale. The model may only pick one of these intents.
 Sort and group columns are closed enums. No intent writes data.
 
+## Known exclusion: conditions without a SNOMED suffix
+
+`top_conditions` sorts conditions into `disorder`, `finding` and `situation` by the
+suffix of the name (`(disorder)` and so on). In the slice, 39 distinct condition names
+(97 rows, 40 patients) have no suffix: 25 names coded in ICD-10 (for example
+`Malignant neoplasm of hard palate`) and 15 SNOMED names that carry none (for example
+`Dental caries`, `Acute gingivitis`, `Joint pain`); one name is in both groups. Most are
+dental. The default `disorder` category leaves them out, and so do `finding` and
+`situation`; only `any` returns them. So `Acute gingivitis` is not counted next to
+`Gingivitis (disorder)`, and the default ranking understates dental diagnoses.
+
+Why this is accepted: the suffix is the only signal in the loaded data that separates a
+diagnosis from a finding or a situation. Listing the dental names by hand would be a
+second taxonomy kept outside the data, which drifts when the slice is regenerated.
+Revisit it if dental diagnoses become a real use case: the fix is to load the
+terminology system column and classify on it, not to add a name list.
+
 ## `count_patients`
 
 Count patients, split by one demographic attribute.

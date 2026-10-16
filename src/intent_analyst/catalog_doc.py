@@ -65,6 +65,20 @@ def render_catalog() -> str:
         "`uv run python -m intent_analyst.catalog_doc`.\n"
         "A test fails if this file is stale. The model may only pick one of these intents.\n"
         "Sort and group columns are closed enums. No intent writes data.\n\n"
+        "## Known exclusion: conditions without a SNOMED suffix\n\n"
+        "`top_conditions` sorts conditions into `disorder`, `finding` and `situation` by the\n"
+        "suffix of the name (`(disorder)` and so on). In the slice, 39 distinct condition names\n"
+        "(97 rows, 40 patients) have no suffix: 25 names coded in ICD-10 (for example\n"
+        "`Malignant neoplasm of hard palate`) and 15 SNOMED names that carry none (for example\n"
+        "`Dental caries`, `Acute gingivitis`, `Joint pain`); one name is in both groups. Most are\n"
+        "dental. The default `disorder` category leaves them out, and so do `finding` and\n"
+        "`situation`; only `any` returns them. So `Acute gingivitis` is not counted next to\n"
+        "`Gingivitis (disorder)`, and the default ranking understates dental diagnoses.\n\n"
+        "Why this is accepted: the suffix is the only signal in the loaded data that separates a\n"
+        "diagnosis from a finding or a situation. Listing the dental names by hand would be a\n"
+        "second taxonomy kept outside the data, which drifts when the slice is regenerated.\n"
+        "Revisit it if dental diagnoses become a real use case: the fix is to load the\n"
+        "terminology system column and classify on it, not to add a name list.\n\n"
     )
     return head + "\n".join(_render(i) for i in INTENTS.values())
 

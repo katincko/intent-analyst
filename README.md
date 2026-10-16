@@ -22,3 +22,6 @@ downloaded; the jar is checked against a pinned SHA-256). The output is byte-sta
 uv run pytest tests -q
 uv run ruff check . && uv run mypy
 ```
+
+`make test` runs the same suite but names every test file on the command line (no directory
+argument), and `make lint` runs ruff and mypy.

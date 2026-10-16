@@ -50,3 +50,35 @@ under test.
 | D4 | autoinstall turned on | setting is `True`, expected `False` | yes |
 | D5 | `lock_configuration` removed | 7 failed: `SET` no longer refused as locked | yes |
 | D6 | memory limit raised to 512MB | `488.2 MiB` instead of `244.1 MiB` | yes |
+| D7 | `THREADS = 8` in `db.py` (the test used to import `THREADS`, so this survived; it now compares with the literal 2) | `assert 8 == 2` | yes |
+
+## Loaded columns (`tests/test_results.py::test_every_loaded_column_matches_the_csv`)
+
+Whole rows of each table are compared with the CSV recounted in Python. A column that is loaded
+without an entry in the test table fails `test_every_loaded_column_has_an_expectation`.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| L1 | `city` read from `COUNTY` | 1 failed: the 53 patient rows differ in `city` | yes |
+| L2 | `income` plus one | 1 failed: every income is off by one | yes |
+| L3 | `conditions.start_date` read from `STOP` | 1 failed: empty dates instead of the start dates | yes |
+| L4 | `conditions.encounter` read from `PATIENT` | 1 failed: the encounter ids are patient ids | yes |
+| L5 | `first_name` read from `LAST` | 1 failed on patients, and the result tests that print names fail too | yes |
+
+## Tie-breaks (`tests/test_results.py`)
+
+Literal expectations. In the encounter cases the id order differs from the CSV file order and
+from the alphabetical order of the descriptions.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| T1 | `patient_encounters` orders ties by `e.id DESC` | 3 failed: same-day encounters come back swapped | yes |
+| T2 | `patient_encounters` has no id tie-break | 1 failed (the ascending case). The order of ties is then left to the engine, so this guard catches it only when the engine happens to pick another order | yes |
+| T3 | `medications_for_condition` orders ties by `medication DESC` | 3 failed: `albuterol` before `60 ACTUAT Fluticasone`, and the cut keeps the wrong medications | yes |
+| T4 | `medications_for_condition` has no name tie-break | 3 failed: the three tied cases come back in engine order | yes |
+
+## Conditions without a suffix (`tests/test_results.py`)
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| U1 | `disorder` category defined as "not finding and not situation" | 1 failed: `Dental caries` appears under `disorder`, expected an empty list | yes |

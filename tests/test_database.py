@@ -3,7 +3,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from intent_analyst.db import TABLE_COLUMNS, THREADS
+from intent_analyst.db import TABLE_COLUMNS
 
 ROOT = Path(__file__).resolve().parent.parent
 CSV = (ROOT / "data" / "synthea" / "patients.csv").as_posix()
@@ -72,7 +72,8 @@ def _setting(con: duckdb.DuckDBPyConnection, name: str) -> object:
 
 
 def test_resource_caps_are_applied(con: duckdb.DuckDBPyConnection) -> None:
-    assert _setting(con, "threads") == THREADS
+    # Literals on purpose: comparing with the constants from the code would pass for any value.
+    assert _setting(con, "threads") == 2
     assert _setting(con, "memory_limit") == "244.1 MiB"  # 256MB as DuckDB reports it
 
 

@@ -5,6 +5,7 @@ sort) so a wrong filter, direction, column or formula in the catalog changes the
 """
 
 import csv
+import re
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from datetime import date
@@ -17,7 +18,7 @@ import duckdb
 import pytest
 
 from intent_analyst.catalog import INTENTS, REFERENCE_DATE
-from intent_analyst.db import run_intent, run_sql
+from intent_analyst.db import TABLE_COLUMNS, run_intent, run_sql
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "synthea"
 Row = dict[str, str]
@@ -105,6 +106,78 @@ def test_loaded_dates_match_the_csv(con: duckdb.DuckDBPyConnection) -> None:
         )
         for p in rows("patients")
     }
+    assert got == want
+
+
+def _as_date(text: str) -> date:
+    return date.fromisoformat(text[:10])
+
+
+# Per table and loaded column: the CSV column and the plain-Python conversion it must match.
+# A column loaded without an entry here fails test_every_loaded_column_has_an_expectation.
+Convert = Callable[[str], Any]
+LOADED: dict[str, dict[str, tuple[str, Convert]]] = {
+    "patients": {
+        "id": ("Id", str),
+        "birthdate": ("BIRTHDATE", _as_date),
+        "deathdate": ("DEATHDATE", lambda v: _as_date(v) if v else None),
+        "first_name": ("FIRST", str),
+        "last_name": ("LAST", str),
+        "marital": ("MARITAL", lambda v: v or "unknown"),
+        "race": ("RACE", str),
+        "ethnicity": ("ETHNICITY", str),
+        "gender": ("GENDER", str),
+        "city": ("CITY", str),
+        "county": ("COUNTY", str),
+        "income": ("INCOME", int),
+    },
+    "encounters": {
+        "id": ("Id", str),
+        "start_date": ("START", _as_date),
+        "patient": ("PATIENT", str),
+        "encounter_class": ("ENCOUNTERCLASS", str),
+        "description": ("DESCRIPTION", str),
+        "total_claim_cost": ("TOTAL_CLAIM_COST", float),
+        "reason_description": ("REASONDESCRIPTION", lambda v: v or None),
+    },
+    "conditions": {
+        "start_date": ("START", _as_date),
+        "patient": ("PATIENT", str),
+        "encounter": ("ENCOUNTER", str),
+        "description": ("DESCRIPTION", str),
+    },
+    "medications": {
+        "start_date": ("START", _as_date),
+        "patient": ("PATIENT", str),
+        "description": ("DESCRIPTION", str),
+        "total_cost": ("TOTALCOST", float),
+        "reason_description": ("REASONDESCRIPTION", lambda v: v or None),
+    },
+    "procedures": {
+        "start_date": ("START", _as_date),
+        "patient": ("PATIENT", str),
+        "description": ("DESCRIPTION", str),
+        "base_cost": ("BASE_COST", float),
+    },
+}
+
+
+def test_every_loaded_column_has_an_expectation() -> None:
+    assert {t: set(c) for t, c in LOADED.items()} == {t: set(c) for t, c in TABLE_COLUMNS.items()}
+
+
+@pytest.mark.parametrize("table", list(LOADED))
+def test_every_loaded_column_matches_the_csv(con: duckdb.DuckDBPyConnection, table: str) -> None:
+    """Whole rows, so a column read from the wrong CSV field or shifted between rows fails."""
+    names = list(LOADED[table])
+    got = Counter(
+        tuple(r[n] for n in names)
+        for r in run_sql(con, f"SELECT {', '.join(names)} FROM {table}", {})  # noqa: S608
+    )
+    want = Counter(
+        tuple(LOADED[table][n][1](r[LOADED[table][n][0]]) for n in names) for r in rows(table)
+    )
+    assert sum(want.values()) == len(rows(table))  # the expectation kept every CSV row
     assert got == want
 
 
@@ -477,3 +550,120 @@ def test_patient_encounters(con: duckdb.DuckDBPyConnection, direction: str) -> N
         (e["START"][:10], e["DESCRIPTION"]) for e in mine[:15]
     ]
     assert len({r["date"] for r in got}) > 1
+
+
+# ---- tie-breaks, with literal expectations read off the CSV by hand ----
+
+# Two encounters of one patient on the same day. The query breaks the tie by encounter id
+# ascending, in both directions. The id order differs from the CSV file order and from the
+# alphabetical order of the descriptions, so neither of those can pass by accident.
+SAME_DAY = [
+    (
+        "e74367bd-7385-97dc-2c7f-251b4cd9fe29",
+        "2019-10-08",
+        "asc",
+        [
+            ("ambulatory", "Screening surveillance (regime/therapy)", 211.6),
+            ("ambulatory", "Postoperative follow-up visit (procedure)", 573.98),
+        ],
+    ),
+    (
+        "e74367bd-7385-97dc-2c7f-251b4cd9fe29",
+        "2019-10-08",
+        "desc",
+        [
+            ("ambulatory", "Screening surveillance (regime/therapy)", 211.6),
+            ("ambulatory", "Postoperative follow-up visit (procedure)", 573.98),
+        ],
+    ),
+    (
+        "beaf769d-aa1d-c8ab-c0b9-3b8294a76d5d",
+        "2025-03-08",
+        "desc",
+        [
+            ("snf", "Hospital admission (procedure)", 6797.62),
+            ("emergency", "Emergency room admission (procedure)", 1008.98),
+        ],
+    ),
+]
+
+
+@pytest.mark.parametrize(("patient", "day", "direction", "want"), SAME_DAY)
+def test_patient_encounters_same_day_ties_break_by_id(
+    con: duckdb.DuckDBPyConnection,
+    patient: str,
+    day: str,
+    direction: str,
+    want: list[tuple[str, str, float]],
+) -> None:
+    got = run_intent(
+        con, "patient_encounters", {"patient_id": patient, "direction": direction, "limit": 50}
+    )
+    same_day = [
+        (r["class"], r["description"], r["claim_cost"]) for r in got if str(r["date"]) == day
+    ]
+    assert same_day == want
+
+
+COPD = "Chronic obstructive bronchitis (disorder)"
+EMPHYSEMA = "Pulmonary emphysema (disorder)"
+CYSTITIS = "Acute infective cystitis (disorder)"
+FLUTICASONE = (
+    "60 ACTUAT Fluticasone propionate 0.25 MG/ACTUAT / salmeterol 0.05 MG/ACTUAT Dry Powder Inhaler"
+)
+ALBUTEROL = "albuterol 5 MG/ML Inhalation Solution"
+NITROFURANTOIN = (
+    "nitrofurantoin  macrocrystals 25 MG / nitrofurantoin  monohydrate 75 MG Oral Capsule"
+)
+
+
+@pytest.mark.parametrize(
+    ("reason", "limit", "want"),
+    [
+        # Same prescription count (44 and 11): the medication name decides, ascending.
+        (COPD, 10, [(FLUTICASONE, 44, 1), (ALBUTEROL, 44, 1)]),
+        (EMPHYSEMA, 10, [(FLUTICASONE, 11, 1), (ALBUTEROL, 11, 1)]),
+        # Three medications tied at one prescription: the cut keeps the alphabetical first ones.
+        (
+            CYSTITIS,
+            3,
+            [
+                (NITROFURANTOIN, 3, 2),
+                ("cephalexin 500 MG Oral Tablet", 1, 1),
+                ("ciprofloxacin 250 MG Oral Tablet", 1, 1),
+            ],
+        ),
+    ],
+)
+def test_medications_for_condition_ties_break_by_name(
+    con: duckdb.DuckDBPyConnection, reason: str, limit: int, want: list[tuple[str, int, int]]
+) -> None:
+    got = run_intent(con, "medications_for_condition", {"reason": reason, "limit": limit})
+    assert [(r["medication"], r["prescriptions"], r["patients"]) for r in got] == want
+
+
+# ---- conditions without a SNOMED suffix (documented in CATALOG.md) ----
+
+
+def _has_suffix(description: str) -> bool:
+    return re.search(r"\([^)]*\)$", description) is not None
+
+
+def test_unsuffixed_conditions_are_the_documented_size() -> None:
+    plain = [c for c in rows("conditions") if not _has_suffix(c["DESCRIPTION"])]
+    assert len({c["DESCRIPTION"] for c in plain}) == 39
+    assert len(plain) == 97
+    assert len({c["PATIENT"] for c in plain}) == 40
+
+
+def test_unsuffixed_conditions_only_appear_with_category_any(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    for category in ("disorder", "finding", "situation"):
+        got = run_intent(
+            con, "top_conditions", {"category": category, "name_contains": "dental caries"}
+        )
+        assert got == [], category
+    got = run_intent(con, "top_conditions", {"category": "any", "name_contains": "dental caries"})
+    people = {c["PATIENT"] for c in rows("conditions") if c["DESCRIPTION"] == "Dental caries"}
+    assert {"condition": "Dental caries", "patients": len(people), "occurrences": 19} in got
