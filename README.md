@@ -7,8 +7,14 @@ data, the intent catalog (`CATALOG.md`) and the SQL assembler. The LLM loop come
 ## Data
 
 `data/synthea/` is a 53-patient slice of synthetic [Synthea](https://github.com/synthetichealth/synthea)
-v4.0.0 output (seed 42, reference date 2026-01-01), licensed Apache-2.0 (see the LICENSE of the official repository).
-Regenerate it with `scripts/generate_data.sh` (needs Docker; Java runs in a container).
+v4.0.0 output (seed 42, reference and end date 2026-01-01), licensed Apache-2.0
+([Synthea LICENSE](https://github.com/synthetichealth/synthea/blob/v4.0.0/LICENSE)).
+The data is 100% synthetic: no real person is in it. The identification columns (SSN, driver's
+license, passport, address, coordinates, zip, maiden name) are never loaded into the database.
+
+Regenerate it with `scripts/generate_data.sh`. Generation depends on Docker (Java runs in a
+container, pinned by image digest) and on network access (the Synthea jar and the image are
+downloaded; the jar is checked against a pinned SHA-256). The output is byte-stable.
 
 ## Checks
 
