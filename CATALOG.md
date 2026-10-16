@@ -32,10 +32,11 @@ Example: "How many patients are in each 10-year age band?" with `{"band_years": 
 
 ## `top_conditions`
 
-Most common diagnoses, optionally filtered by a word in the condition name.
+Most common diagnoses (SNOMED disorders by default; findings and situations are separate categories), optionally filtered by a word in the condition name.
 
 | Parameter | Type and allowed values | Required or default |
 |---|---|---|
+| `category` | one of `disorder`, `finding`, `situation`, `any` | disorder |
 | `limit` | integer, min `1`, max `50` | 10 |
 | `name_contains` | string, max length `200` or null | None |
 | `order_by` | one of `patients`, `occurrences` | patients |
@@ -43,7 +44,7 @@ Most common diagnoses, optionally filtered by a word in the condition name.
 
 Reads: `conditions`: `description`, `patient`.
 
-Example: "What are the 5 most common diagnoses?" with `{"limit": 5}`.
+Example: "What are the 5 most common diagnoses (disorders)?" with `{"limit": 5}`.
 
 ## `condition_prevalence`
 
@@ -128,7 +129,7 @@ Most common procedures with their cost, optionally for one year.
 
 Reads: `procedures`: `description`, `start_date`, `base_cost`.
 
-Example: "What were the most common procedures in 2015?" with `{"year": 2015, "limit": 5}`.
+Example: "What were the most common procedures in 2020?" with `{"year": 2020, "limit": 5}`.
 
 ## `patient_encounters`
 

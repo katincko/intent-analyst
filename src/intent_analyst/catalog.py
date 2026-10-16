@@ -60,6 +60,16 @@ class Direction(SqlEnum):
     desc = ("desc", "DESC")
 
 
+class ConditionCategory(SqlEnum):
+    """Synthea conditions are SNOMED terms whose suffix says what they are. Only '(disorder)'
+    terms are diagnoses; the others are findings and situations ('Medication review due')."""
+
+    disorder = ("disorder", "ends_with(c.description, '(disorder)')")
+    finding = ("finding", "ends_with(c.description, '(finding)')")
+    situation = ("situation", "ends_with(c.description, '(situation)')")
+    any = ("any", "TRUE")
+
+
 class ConditionOrder(SqlEnum):
     patients = ("patients", "patients")
     occurrences = ("occurrences", "occurrences")
@@ -114,6 +124,7 @@ class PatientsByAgeBand(Params):
 
 
 class TopConditions(Params):
+    category: ConditionCategory = ConditionCategory.disorder
     limit: Limit = 10
     name_contains: Text | None = None
     order_by: ConditionOrder = ConditionOrder.patients
@@ -200,14 +211,15 @@ INTENTS: dict[str, Intent] = {
         ),
         Intent(
             "top_conditions",
-            "Most common diagnoses, optionally filtered by a word in the condition name.",
+            "Most common diagnoses (SNOMED disorders by default; findings and situations are "
+            "separate categories), optionally filtered by a word in the condition name.",
             TopConditions,
             "SELECT c.description AS condition, count(DISTINCT c.patient) AS patients, "
-            "count(*) AS occurrences FROM conditions c WHERE "
+            "count(*) AS occurrences FROM conditions c WHERE {category} AND "
             "($name_contains IS NULL OR contains(lower(c.description), lower($name_contains))) "
             "GROUP BY 1 ORDER BY {order_by} {direction}, condition LIMIT $limit",
             {"conditions": ["description", "patient"]},
-            "What are the 5 most common diagnoses?",
+            "What are the 5 most common diagnoses (disorders)?",
             {"limit": 5},
         ),
         Intent(
@@ -288,8 +300,8 @@ INTENTS: dict[str, Intent] = {
             "FROM procedures pr WHERE ($year IS NULL OR year(pr.start_date) = $year) "
             "GROUP BY 1 ORDER BY {order_by} {direction}, procedure LIMIT $limit",
             {"procedures": ["description", "start_date", "base_cost"]},
-            "What were the most common procedures in 2015?",
-            {"year": 2015, "limit": 5},
+            "What were the most common procedures in 2020?",
+            {"year": 2020, "limit": 5},
         ),
         Intent(
             "patient_encounters",
