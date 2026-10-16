@@ -3,7 +3,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from intent_analyst.db import TABLE_COLUMNS
+from intent_analyst.db import TABLE_COLUMNS, THREADS
 
 ROOT = Path(__file__).resolve().parent.parent
 CSV = (ROOT / "data" / "synthea" / "patients.csv").as_posix()
@@ -63,3 +63,31 @@ def test_no_direct_identifier_is_loaded() -> None:
     forbidden = {"ssn", "drivers", "passport", "address", "lat", "lon", "zip", "maiden"}
     loaded = {c for cols in TABLE_COLUMNS.values() for c in cols}
     assert not forbidden & loaded
+
+
+def _setting(con: duckdb.DuckDBPyConnection, name: str) -> object:
+    row = con.execute("SELECT current_setting(?)", [name]).fetchone()
+    assert row
+    return row[0]
+
+
+def test_resource_caps_are_applied(con: duckdb.DuckDBPyConnection) -> None:
+    assert _setting(con, "threads") == THREADS
+    assert _setting(con, "memory_limit") == "244.1 MiB"  # 256MB as DuckDB reports it
+
+
+@pytest.mark.parametrize("statement", ["SET memory_limit = '8GB'", "SET threads = 64"])
+def test_resource_caps_cannot_be_raised(con: duckdb.DuckDBPyConnection, statement: str) -> None:
+    before = (_setting(con, "memory_limit"), _setting(con, "threads"))
+    with pytest.raises(duckdb.Error, match="locked"):
+        con.execute(statement)
+    assert (_setting(con, "memory_limit"), _setting(con, "threads")) == before
+
+
+@pytest.mark.parametrize("flag", ["autoload_known_extensions", "autoinstall_known_extensions"])
+def test_extension_autoload_and_autoinstall_are_off(
+    con: duckdb.DuckDBPyConnection, flag: str
+) -> None:
+    assert _setting(con, flag) is False
+    with pytest.raises(duckdb.Error, match="locked"):
+        con.execute(f"SET {flag} = true")
