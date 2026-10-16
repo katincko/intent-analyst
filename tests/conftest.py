@@ -1,4 +1,5 @@
 import shutil
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -30,3 +31,14 @@ def con(db_copy: Path) -> Iterator[duckdb.DuckDBPyConnection]:
     connection = open_readonly(db_copy)
     yield connection
     connection.close()
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may open a connection. The model client is a fake transport, never a socket."""
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a test tried to use the network")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "getaddrinfo", refuse)

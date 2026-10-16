@@ -82,3 +82,69 @@ from the alphabetical order of the descriptions.
 | # | Planted bug | Red result and reason | Green after restore |
 |---|---|---|---|
 | U1 | `disorder` category defined as "not finding and not situation" | 1 failed: `Dental caries` appears under `disorder`, expected an empty list | yes |
+
+## Tool-use loop (batch 2)
+
+All runs used `.venv/Scripts/python.exe -m pytest <files> -q` with the files named. The fake
+Messages API (`tests/fake_api.py`) enforces the tool_use / tool_result rules of
+https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls, and its own
+guard test (`test_the_fake_rejects_a_broken_contract`) proves it refuses a missing result, a
+wrong id, text before results and a missing next message. When the loop breaks a rule the fake
+answers 400 and the loop reports `api_error`, which is why several contract rows below show
+`'stopped' == 'answered'`.
+
+### Contract (`tests/test_agent_contract.py`, spec test 1)
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| A1 | only the first `tool_result` of a turn is sent back | 3 failed: the fake rejects a turn with several `tool_use` and one result | yes |
+| A2 | the error result carries a wrong `tool_use_id` | 4 failed: the fake rejects the unmatched id | yes |
+| A3 | `is_error` never set | 5 failed: `KeyError: 'is_error'` on every error result | yes |
+| A4 | a turn cut by `max_tokens` with a `tool_use` gets text instead of results | 1 failed: the fake rejects the missing result | yes |
+| A5 | protocol retries unbounded | 1 failed: expected stop `protocol`, got a third request nobody scripted (`api_error`) | yes |
+| A6 | `tool_choice={"type": "any"}` sent | 1 failed: `tool_choice` found in the request body | yes |
+| A7 | terminal tool runs beside another tool | 1 failed: the `alone` error is missing, the call ran | yes |
+| A17 | fourth intent allowed | 1 failed: last result is not an error | yes |
+
+### Limits (`tests/test_limits.py`, spec test 6)
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| A8 | step limit `>` instead of `>=` | 2 failed: 7 requests instead of 6 | yes |
+| A9 | cost stops at exactly the limit | 1 failed: a question at exactly US$ 0.05 is stopped | yes |
+| A9b | cost limit doubled | 3 failed: `refused` instead of `max_cost` | yes |
+| A10 | time limit never fires | 2 failed: `refused` instead of `timeout` | yes |
+| A11 | request timeout fixed at 30 s | 1 failed: `[30, 30, 30]` instead of `[30, 18, 6]` | yes |
+| A12 | SDK retries left on | 2 failed: a 429 and a read timeout are retried, so the scripted replies run out | yes |
+| A13 | `usage` cost never added | 4 failed: no limit ever fires | yes |
+| P1 | sonnet output price doubled | 2 failed: 0.061 instead of 0.0605, and the literal cost table | yes |
+| P2 | haiku long-prompt tier dropped | 1 failed: 0.0100001 instead of 0.0500005 | yes |
+| P3 | cache reads billed as input | 2 failed: 2 instead of 0.10 | yes |
+| P4 | unknown model costs nothing | 1 failed: `DID NOT RAISE KeyError` | yes |
+
+### Grounding (`tests/test_grounding.py`, spec test 5)
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| A14 | grounding check skipped | 3 failed: the answer with the invented 53 is accepted | yes |
+| A15 | unknown sources not checked | 1 failed: `KeyError: 'r9'` | yes |
+| A16 | every table counts, not only cited ones | 1 failed: an answer citing the wrong table is accepted | yes |
+| A19 | tool error limit never fires | 1 failed: expected `tool_errors`, got a request nobody scripted | yes |
+| G1 | quotes of text cells not masked | 3 failed: `5` from `albuterol 5 MG/ML` is reported, and the borrowed `5` is not | yes |
+| G2 | numbers of the question not allowed | 1 failed: the repeated `5` is reported | yes |
+| G3 | booleans count as numbers | 1 failed: `InvalidOperation` on a boolean cell | yes |
+| G4 | rounded numbers accepted | 1 failed: `About 51%` passes | yes |
+
+### Search and network guard
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| S1 | search is case sensitive | 5 failed: upper case words find nothing | yes |
+| S2 | no value tie-break | 3 failed: tied matches come back in another order | yes |
+| S3 | limit ignored | 1 failed: 50 rows instead of 3 | yes |
+| N1 | socket `connect` not guarded | 1 failed: a real `ConnectionRefusedError` instead of the guard | yes |
+| N2 | `getaddrinfo` not guarded | 1 failed: `DID NOT RAISE AssertionError` | yes |
+
+Weak spots, stated: A5 and A19 go red through the fake's "request nobody scripted" assertion
+(the loop kept asking), which is the correct symptom of an unbounded retry or error limit but
+not the loop's own stop reason. T2 above depends on the engine's tie order.
