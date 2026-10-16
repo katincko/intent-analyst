@@ -74,8 +74,13 @@ def build_database(csv_dir: Path, db_path: Path) -> None:
         con.close()
 
 
+# Resource caps for the query connection, set before the configuration is locked.
+MEMORY_LIMIT = "256MB"
+THREADS = 2
+
+
 def open_readonly(db_path: Path) -> duckdb.DuckDBPyConnection:
-    """Read-only, no file or network access, configuration frozen (it cannot be unfrozen)."""
+    """Read-only, no file or network access, capped memory and threads, configuration frozen."""
     return duckdb.connect(
         str(db_path),
         read_only=True,
@@ -83,6 +88,8 @@ def open_readonly(db_path: Path) -> duckdb.DuckDBPyConnection:
             "enable_external_access": False,
             "autoinstall_known_extensions": False,
             "autoload_known_extensions": False,
+            "memory_limit": MEMORY_LIMIT,
+            "threads": THREADS,
             "lock_configuration": True,
         },
     )
