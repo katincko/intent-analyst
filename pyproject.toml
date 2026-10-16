@@ -1,7 +1,37 @@
 [project]
 name = "intent-analyst"
 version = "0.1.0"
-description = "Add your description here"
+description = "Data analyst that answers questions by picking intents from a closed catalog, never by writing free SQL."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "duckdb>=1.5.6",
+    "pydantic>=2.14.1",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S608"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
