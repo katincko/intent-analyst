@@ -3,6 +3,7 @@ an estimate of the prompt."""
 
 from dataclasses import dataclass
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Protocol
 
 # Bump when a price below changes, and say where it was read.
@@ -64,3 +65,15 @@ def cost_usd(model: str, usage: Usage) -> Decimal:
         + usage.output_tokens * price.output
     )
     return total / _MILLION
+
+
+def worst_case_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
+    """The most one response can cost: every input token billed as a 1 hour cache write, the
+    highest of the three input rates (and the long rate of Haiku over 100,000 tokens)."""
+    usage = SimpleNamespace(
+        input_tokens=0,
+        output_tokens=output_tokens,
+        cache_creation_input_tokens=input_tokens,
+        cache_read_input_tokens=0,
+    )
+    return cost_usd(model, usage)

@@ -275,3 +275,20 @@ from the cache per question, which is the real answer.
 | C2 | the system text gets the clock reading appended on every request | 2 failed: the breakpoint test and the byte-for-byte prefix test, the prefix differs between questions | yes |
 | C3 | a second breakpoint on the user message | 1 failed: `cache_control` found in the messages | yes |
 | C4 | token counters never summed | 1 failed: the outcome reports 0 cache tokens instead of 900 | yes |
+
+### V3 executor and global cap (`tests/test_evaluation.py`)
+
+Why the cap holds: a question stops when its cost is over its cap, and the check follows a
+response, so it ends at most one response over. One response is bounded by the 60,000 byte request
+limit (a token covers at least one byte, plus 1,000 tokens of overhead) and by `max_tokens`. The
+runner starts a question only if what is left of the global cap is at least that bound plus the
+question cap. The first plant is the spec's own item "global cap removed".
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| T1 | the check against what is left of the global cap removed | 8 failed: the worst-case rehearsal goes over US$ 2.00 for sonnet and opus, the edge test and the cap-under-one-reserve test | yes |
+| T2 | the check uses the question cap (US$ 0.05) instead of the reserve | 6 failed: the same rehearsal passes US$ 2.00, the next question started with US$ 0.155 left | yes |
+| T3 | the missing-key check removed | 1 failed: a client is built without a key | yes |
+| T4 | the request byte limit not applied in the loop | 2 failed: a 100 byte limit still sends the request, and the growing request is never stopped | yes |
+| T5 | a timeout or API error charged at 0 | 1 failed: the charge is 0 instead of the worst case of one response | yes |
+| T6 | the per-block sample ignored | 3 failed: 92 questions instead of 26, wrong spread, wrong plan total | yes |

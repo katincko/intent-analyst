@@ -8,6 +8,9 @@ Limits per question (all checked after every response, before it is acted on):
 * steps: at most `max_steps` requests to the model;
 * cost: at most `max_usd`, from the `usage` of each response and the versioned price table. The
   cap is checked after the spend, so a question can end up to one response over it;
+* size: no request is sent whose JSON body is over `max_request_bytes`. A token covers at least one
+  byte, so this bounds the input of one response, and with it the cost of one response, which is
+  what lets an evaluation prove that its total can never pass its global cap;
 * time: at most `max_seconds` on an injectable clock (exactly the limit is still allowed for a
   reply, but no new request starts with no time left), and the HTTP timeout of each request is
   the time that is left.
@@ -26,7 +29,7 @@ from typing import Any, Literal, cast
 import anthropic
 import duckdb
 from anthropic.types import MessageParam, OutputConfigParam, TextBlockParam
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from intent_analyst.catalog import INTENTS
 from intent_analyst.grounding import ungrounded_numbers
@@ -92,6 +95,7 @@ Status = Literal["answered", "clarification", "refused", "stopped"]
 StopReason = Literal[
     "max_steps",
     "max_cost",
+    "request_too_large",
     "timeout",
     "protocol",
     "tool_errors",
@@ -106,6 +110,7 @@ class Limits:
     max_steps: int = 6
     max_usd: Decimal = Decimal("0.05")
     max_seconds: float = 30.0
+    max_request_bytes: int = 60_000
 
 
 @dataclass(frozen=True)
@@ -181,6 +186,21 @@ def _table_json(table: Table) -> str:
     return json.dumps(
         {"result_id": table.id, "columns": table.columns, "rows": table.rows}, default=str
     )
+
+
+def _json_bytes(value: Any) -> int:
+    """Size of the JSON of a request part. SDK content blocks (pydantic models) are dumped."""
+
+    def default(o: Any) -> Any:
+        if isinstance(o, BaseModel):
+            return o.model_dump(mode="json")
+        raise TypeError(type(o))
+
+    return len(json.dumps(value, default=default))
+
+
+# The tools and the system prompt are sent with every request.
+_PREFIX_BYTES = _json_bytes([tool_definitions(), SYSTEM_BLOCKS])
 
 
 class _Question:
@@ -275,6 +295,13 @@ class _Question:
                 )
             if (hit := self._limit_hit(before_request=True)) is not None:
                 return hit
+            size = _PREFIX_BYTES + _json_bytes(messages)
+            if size > self.limits.max_request_bytes:
+                return self._stop(
+                    "request_too_large",
+                    f"Stopped: the next request would be {size} bytes, over the "
+                    f"{self.limits.max_request_bytes} byte limit.",
+                )
             remaining = self.limits.max_seconds - (self.clock() - self.started)
             self.steps += 1
             try:
