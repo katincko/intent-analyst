@@ -45,6 +45,8 @@ typed in the question. A rejected answer goes back to the model as a tool error 
 numbers, so it can quote the table or say it in words. Verbatim quotes of text cells (a
 medication such as `albuterol 5 MG/ML Inhalation Solution`, a year bucket, a date) are masked
 before the scan, so the digits inside them cannot be borrowed by another claim.
+Every other digit is checked: a number glued to a letter (`99k`, `99x`, `1e3`, `2nd`, `v2`) is rejected
+whole, because it cannot be compared with a cell.
 
 Known gaps: numbers written as words ("three") are not checked; a number the user typed may be
 repeated even if it does not describe the result; a parameter the model copies from one table

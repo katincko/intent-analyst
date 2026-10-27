@@ -148,3 +148,11 @@ answers 400 and the loop reports `api_error`, which is why several contract rows
 Weak spots, stated: A5 and A19 go red through the fake's "request nobody scripted" assertion
 (the loop kept asking), which is the correct symptom of an unbounded retry or error limit but
 not the loop's own stop reason. T2 above depends on the engine's tie order.
+
+## Lot 4
+
+Runs: `uv run pytest <file> -q`, files named. Bug planted, red copied, restored with `git checkout`, green again.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| Q1 | grounding scan back to the old rule (a number glued to a letter is not read as a number) | 9 failed: `assert [] == ['99k']`, same for `99x`, `1e3`, `2nd`, `v2`, and `['1.2'] == ['1.2.3']` | yes |

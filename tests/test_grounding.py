@@ -87,6 +87,33 @@ def test_a_boolean_cell_is_not_a_number() -> None:
     assert missing("It is 1.", table=[[True]]) == ["1"]
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("About 99k patients.", ["99k"]),
+        ("99x more patients.", ["99x"]),
+        ("1e3 patients.", ["1e3"]),
+        ("The 2nd group.", ["2nd"]),
+        ("About 99 patients.", ["99"]),
+        ("Version v2 of the data.", ["v2"]),
+        ("Release 1.2.3 of the data.", ["1.2.3"]),
+        ("About 27k patients.", ["27k"]),  # 27 is a cell, the glued suffix still counts
+    ],
+)
+def test_a_number_glued_to_a_letter_is_rejected(text: str, expected: list[str]) -> None:
+    assert missing(text) == expected
+
+
+def test_a_glued_number_is_rejected_even_when_the_question_typed_it() -> None:
+    assert missing("About 5k patients.", question="Are there 5k patients?") == ["5k"]
+
+
+def test_a_glued_number_inside_a_quoted_text_cell_is_masked() -> None:
+    table = [["2nd opinion visit", 4]]
+    assert missing("4 patients had a 2nd opinion visit.", table=table) == []
+    assert missing("4 patients had a 2nd visit.", table=table) == ["2nd"]
+
+
 # ---- through the loop ----
 
 GENDER = {"intent": "count_patients", "params": {"group_by": "gender"}}

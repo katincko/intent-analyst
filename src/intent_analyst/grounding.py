@@ -6,6 +6,9 @@ Rules, kept deliberately strict:
 * Text cells never supply numbers. When the answer quotes a text cell verbatim (a medication
   such as "albuterol 5 MG/ML", a year bucket "2020", a date), that quote is masked before the
   scan, so the digits inside it are not checked and cannot be borrowed by an unrelated claim.
+* Every digit of the answer is checked. A number glued to a letter ("99k", "99x", "1e3", "2nd",
+  "v2") or to another dotted number ("1.2.3") is rejected whole, because it cannot be compared
+  with a cell. Only a verbatim quote of a text cell (masked, see above) may contain such a token.
 * Numbers typed in the question may be repeated ("the 5 most common"), because the user
   supplied them.
 * Numbers written as words ("three") are not checked. This is a known gap, listed in the README.
@@ -18,6 +21,10 @@ from typing import Any
 
 # Not glued to a word character or a dot before it, so "1.2.3" and "v2" are not read as numbers.
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:,\d{3})*(?:\.\d+)?%?(?![\w])")
+# What the answer scan reads. First a plain number that stands alone; otherwise any word made of
+# letters, digits, underscores and inner dots that has a digit in it (a glued number).
+_WORD = r"(?:\w|\.(?=\w))"
+_TOKEN = re.compile(rf"(?<![\w.])-?\d+(?:,\d{{3}})*(?:\.\d+)?%?(?!\w|\.\d)|{_WORD}*\d{_WORD}*")
 Cell = Any
 
 
@@ -53,8 +60,12 @@ def ungrounded_numbers(
     allowed = {Decimal(str(c)) for c in cells if _is_number(c)}
     allowed.update(numbers_in(question))
     missing = []
-    for match in _NUMBER.finditer(_mask_quoted_cells(text, cells)):
-        value = _decimal(match.group())
+    for match in _TOKEN.finditer(_mask_quoted_cells(text, cells)):
+        token = match.group()
+        if _NUMBER.fullmatch(token) is None:  # glued to a letter or a dot: cannot be a cell
+            missing.append(token)
+            continue
+        value = _decimal(token)
         if value is not None and value not in allowed:
-            missing.append(match.group())
+            missing.append(token)
     return missing
