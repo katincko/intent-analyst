@@ -168,3 +168,14 @@ Runs: `uv run pytest <file> -q`, files named. Bug planted, red copied, restored 
 | Q5c | the loop puts the `tool_use` block before the thinking blocks | 2 failed: `['tool_use', ...] == ['thinking', 'redacted_thinking', 'tool_use']` | yes |
 | Q5d | the fake no longer checks thinking blocks | 7 failed: the seven `test_the_fake_rejects_a_changed_thinking_block` cases do not raise | yes |
 | Q5e | stop message without the `request-id` header (test written first) | 1 failed before the fix: `'req_header_only' in "Stopped: ... Error code: 500 - {...}"`. The SDK message already holds the id when the body has it, so only a header-only id was missing | yes |
+
+## Lot 5
+
+Gates of `make verify`. Each one was proved by planting the failure, seeing it red, removing the
+plant and seeing it green. Nothing planted was committed.
+
+### Dash check (`scripts/check_dashes.py`, `tests/test_check_dashes.py`)
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| D1 | an em dash (U+2014) appended to `README.md` | the script exits 1 with `README.md:87: em dash (U+2014)`, and `test_repository_has_no_dash` fails with `assert 1 == 0` | yes, `git checkout README.md` |
