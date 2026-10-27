@@ -212,12 +212,14 @@ class FakeMessagesApi:
     requests: list[dict[str, Any]] = field(default_factory=list)
     issued: list[list[dict[str, Any]]] = field(default_factory=list)  # content of each reply sent
     timeouts: list[Any] = field(default_factory=list)
+    headers: list[dict[str, str]] = field(default_factory=list)  # of each request received
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         assert request.url.path == "/v1/messages", request.url
         body = json.loads(request.content)
         self.requests.append(body)
         self.timeouts.append(request.extensions.get("timeout"))
+        self.headers.append(dict(request.headers))
         if problem := contract_problem(body):
             return error_response(400, "invalid_request_error", problem)
         if problem := thinking_problem(body, self.issued):
@@ -233,9 +235,9 @@ class FakeMessagesApi:
         self.issued.append(reply.body["content"])
         return httpx2.Response(200, json=reply.body)
 
-    def client(self) -> anthropic.Anthropic:
+    def client(self, api_key: str = "test-key-not-real") -> anthropic.Anthropic:
         return anthropic.Anthropic(
-            api_key="test-key-not-real",
+            api_key=api_key,
             base_url="http://fake-messages-api.invalid",
             http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(self)),
         )

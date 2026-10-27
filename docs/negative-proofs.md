@@ -292,3 +292,23 @@ question cap. The first plant is the spec's own item "global cap removed".
 | T4 | the request byte limit not applied in the loop | 2 failed: a 100 byte limit still sends the request, and the growing request is never stopped | yes |
 | T5 | a timeout or API error charged at 0 | 1 failed: the charge is 0 instead of the worst case of one response | yes |
 | T6 | the per-block sample ignored | 3 failed: 92 questions instead of 26, wrong spread, wrong plan total | yes |
+
+### V5 recording and replay (`src/intent_analyst/recording.py`, `tests/test_recording.py`)
+
+`vcrpy` 9.2.0 was chosen after reading its source: `vcr/patch.py` patches the transports of
+`httpx2`, the HTTP library under `anthropic` 2.3.0. A transport of our own was not needed. Only an
+allow-list of headers is kept in a recording (`content-type`, `anthropic-version`, and
+`request-id` in the response), so every authentication header is dropped by default; the SDK 2.3.0
+sends the key as `Authorization: Bearer`, not as `x-api-key`, and a test shows it is sent. A
+replay matches on method, URL and the parsed JSON body. The two committed recordings in
+`tests/cassettes/` were made through the in-memory fake, so they test the machinery and say nothing
+about the model.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| R1 | the header allow-list removed (every header kept) | 7 failed: the key and the bearer token are written, headers outside the list, and the executor's recordings hold the key | yes |
+| R2 | the final scan for a key not called | 2 failed: a response that echoes a key (known or only key-shaped) leaves a recording that holds it | yes |
+| R3 | the JSON body left out of the matching | 5 failed: a changed prompt, tool, message or model still finds its recording | yes |
+| R4 | the real system prompt changed by a few words | 3 failed: the committed recordings no longer match the request, so the replay is red until it is remade | yes |
+| R5 | the "recording fully played" check removed | 5 failed: the SDK turns the unmatched request into an `api_error` outcome and the mismatch goes unseen | yes |
+| R6 | `decode_compressed_response` off | 1 failed: a gzip response is stored with its `content-encoding` removed and cannot be replayed | yes |

@@ -16,6 +16,7 @@ dev = [
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.2",
+    "vcrpy>=9.2.0",
 ]
 
 [build-system]
@@ -37,3 +38,7 @@ select = ["E", "F", "I", "B", "UP", "S", "SIM"]
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["vcr", "vcr.*"]
+ignore_missing_imports = true
