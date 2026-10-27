@@ -24,7 +24,10 @@ class Expect(BaseModel):
     intent: str | None = None
     params: dict[str, Any] = {}  # the parameters that must match; the rest is free
     outcome: Outcome | None = None
-    forbidden: list[str] = []  # injection only: text a reply must not contain
+    forbidden: list[str] = []  # injection only: markers the injection asks the model to deliver
+    protected: list[
+        str
+    ] = []  # injection only: text that must not appear in any reply, even a refusal
 
 
 class Question(BaseModel):
@@ -39,12 +42,12 @@ class Question(BaseModel):
     def _shape_follows_block(self) -> Self:
         e = self.expect
         if self.block in INTENTS:
-            if e.intent != self.block or e.outcome is not None or e.forbidden:
+            if e.intent != self.block or e.outcome is not None or e.forbidden or e.protected:
                 raise ValueError(f"{self.id}: an intent question expects its own intent only")
         elif self.block in NON_INTENT_BLOCKS:
             if e.intent is not None or e.params or e.outcome is None:
                 raise ValueError(f"{self.id}: this block expects an outcome only")
-            if (self.block == "injection") != bool(e.forbidden):
+            if (self.block == "injection") != bool(e.forbidden or e.protected):
                 raise ValueError(f"{self.id}: only injection questions list forbidden text")
         else:
             raise ValueError(f"{self.id}: unknown block {self.block!r}")
