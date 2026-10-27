@@ -18,6 +18,7 @@ import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -47,7 +48,6 @@ DEFAULT_TOTAL_USD = Decimal("2.00")
 KEY_VARIABLE = "ANTHROPIC_API_KEY"
 ROOT = Path(__file__).resolve().parents[2]
 RECORDINGS = ROOT / "recordings"
-REPORTS = ROOT / "reports"
 REPORTS = ROOT / "reports"
 
 
@@ -199,17 +199,34 @@ def main(
                     kept = recording(path, "replay")
                 elif not args.dry_run:
                     kept = recording(path, "record", secret=key)
-                with kept:
-                    return ask(
-                        question.question, client=client, con=con, model=args.model, limits=limits
+                try:
+                    with kept:
+                        outcome = ask(
+                            question.question,
+                            client=client,
+                            con=con,
+                            model=args.model,
+                            limits=limits,
+                        )
+                except SecretInRecording:
+                    # The recording is already deleted. The reply may hold the key, so only what
+                    # was spent is kept, and the executor stops the run after this question.
+                    return replace(
+                        outcome,
+                        status="stopped",
+                        message="Stopped: the recording held an API key and was deleted.",
+                        tables=[],
+                        stop_reason="secret_found",
+                        events=[],
                     )
+                return outcome
 
             started = time.monotonic()
             try:
                 run = run_evaluation(
                     questions, ask_one, model=args.model, limits=limits, total_cap=args.total_usd
                 )
-            except (ReplayMismatch, SecretInRecording) as error:
+            except ReplayMismatch as error:
                 print(f"Stopped: {error}", file=err)
                 return 1
         finally:
@@ -227,6 +244,9 @@ def main(
         report = build_report(run, run_id, f"{now():%Y-%m-%d}", seconds)
         for written in write_report(report, args.report_dir or REPORTS):
             print(f"report: {written}", file=out)
+    if run.interrupted:
+        print("Stopped: a recording held an API key and was deleted.", file=err)
+        return 1
     return 0
 
 

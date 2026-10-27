@@ -293,3 +293,41 @@ def test_a_replay_after_a_prompt_change_stops_with_the_reason(
 def test_a_replay_of_an_empty_directory_is_refused(tmp_path: Path) -> None:
     code, _, err = run_cli(["--replay", str(tmp_path)], {})
     assert code == 2 and "no recording" in err
+
+
+def test_a_key_in_a_recording_stops_the_run_and_still_writes_a_partial_report(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    replies = [
+        Reply(message([tool_use("refuse", {"reason": reason}, f"toolu_stop_{i:04d}")]))
+        for i, reason in enumerate(["No.", f"your key is {SECRET}", "Third."])
+    ]
+    api = FakeMessagesApi(replies)
+    client = api.client(SECRET)
+
+    def factory(*, api_key: str, **kwargs: Any) -> anthropic.Anthropic:
+        return client
+
+    monkeypatch.setattr(anthropic, "Anthropic", factory)
+    recordings, reports = tmp_path / "rec", tmp_path / "rep"
+    code, out, err = run_cli(
+        ["--yes", "--count", "3", "--record-dir", str(recordings), "--report-dir", str(reports)],
+        {evaluate.KEY_VARIABLE: SECRET},
+    )
+    assert code == 1
+    assert len(api.requests) == 2  # the third question was never asked, so nothing more was spent
+    assert [p.name for p in recordings.glob("*.json")] == ["count_patients-01.json"]
+    (report_file,) = reports.glob("*.json")
+    report = load_report(report_file)
+    assert report.interrupted and "recording held an API key" in (report.notice or "")
+    assert report.questions_run == 2 and report.questions_not_run == 1
+    assert [(q.id, q.status, q.stop_reason) for q in report.questions][1] == (
+        "patients_by_age_band-01",
+        "stopped",
+        "secret_found",
+    )
+    assert "INTERRUPTED" in report_file.with_suffix(".md").read_text(encoding="utf-8")
+    for path in tmp_path.rglob("*"):
+        if path.is_file():
+            assert SECRET not in path.read_text(encoding="utf-8"), path
+    assert SECRET not in out + err and "deleted" in err

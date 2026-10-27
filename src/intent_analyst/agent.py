@@ -102,6 +102,7 @@ StopReason = Literal[
     "api_error",
     "refusal",
     "unexpected",
+    "secret_found",  # set by the evaluation, never by the loop
 ]
 
 

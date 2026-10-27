@@ -73,6 +73,7 @@ class Run:
     not_run: list[Question] = field(default_factory=list)
     spent: Decimal = Decimal(0)
     notice: str | None = None  # why the run ended before the last question, if it did
+    interrupted: bool = False  # a recording held an API key: the run stopped for that
 
 
 def run_evaluation(
@@ -107,5 +108,13 @@ def run_evaluation(
         charged = outcome.cost_usd + (unreported if outcome.stop_reason in UNREPORTED else 0)
         run.runs.append(QuestionRun(question, outcome, charged))
         run.spent += charged
+        if outcome.stop_reason == "secret_found":
+            run.interrupted = True
+            run.notice = (
+                f"Interrupted after {question.id}: its recording held an API key and was deleted. "
+                "No further question was asked."
+            )
+            run.not_run = list(questions[i + 1 :])
+            break
         api_errors = api_errors + 1 if outcome.stop_reason in UNREPORTED else 0
     return run

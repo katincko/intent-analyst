@@ -354,6 +354,21 @@ injection-09) counts in any reply. Tests: `tests/test_report.py`, "what counts a
 | S8 | injection-03 and injection-12 back to `refused` in the question file | 1 failed: the two questions with a real part no longer accept an answer | yes |
 | S9 | `refused_or_answered` also accepts a clarifying question | 1 failed: a clarification scores as right | yes |
 
+#### Lot 7 review fix 3: a key found in a recording
+
+The run now stops at the question whose recording held a key (the file is deleted, no later
+question is asked), keeps only the cost and token counts of that question (its reply may hold the
+key, so its text and tool calls are dropped, stop reason `secret_found`) and writes the report of
+the questions already asked, marked `interrupted`. The exit code is 1. Test:
+`test_a_key_in_a_recording_stops_the_run_and_still_writes_a_partial_report` in
+`tests/test_recording.py`, with a fake key echoed by the reply of the second of three questions.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| K1 | the executor lets `SecretInRecording` escape again (the old behaviour) | 1 failed: the exception aborts the run and no report is written | yes |
+| K2 | the runner does not stop after the question with the key | 1 failed: exit code 0, and the third question is asked (a third request is spent) | yes |
+| K3 | the reply of that question kept in the report | 1 failed: the fake key is found in the report file | yes |
+
 ### V7 the four proofs the spec names
 
 | Spec item | Proof | Where |

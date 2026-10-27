@@ -86,6 +86,7 @@ class Report(BaseModel):
     questions_run: int
     questions_not_run: int
     notice: str | None
+    interrupted: bool = False  # the run stopped because a recording held an API key
     total_cost_usd: Decimal  # from the usage the API reported
     counted_spend_usd: Decimal  # what the cap counted, with worst cases for unreported requests
     total_seconds: float
@@ -225,6 +226,7 @@ def build_report(run: Run, run_id: str, date: str, seconds: float) -> Report:
         questions_run=len(records),
         questions_not_run=len(run.not_run),
         notice=run.notice,
+        interrupted=run.interrupted,
         total_cost_usd=sum((r.cost_usd for r in records), Decimal(0)),
         counted_spend_usd=run.spent,
         total_seconds=round(seconds, 3),
@@ -255,7 +257,8 @@ def render_markdown(report: Report) -> str:
         f"{_pct(report.coverage)}",
     ]
     if report.notice:
-        lines.append(f"- Ended early: {report.notice}")
+        label = "INTERRUPTED" if report.interrupted else "Ended early"
+        lines.append(f"- {label}: {report.notice}")
     lines += [
         "",
         "| Block | Questions | Correct | Intent | Params | Coverage | Cost (US$) | Cost per "

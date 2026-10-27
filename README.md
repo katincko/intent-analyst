@@ -171,6 +171,8 @@ Not run yet. What exists is everything needed to run it once and read the result
   again from the recordings with no network, no key and no cost, and fails if the prompt, the
   tools or the messages changed. The two recordings committed in `tests/cassettes/` were made
   through the in-memory fake, not through the API.
+  If a recording holds a key, the run stops there (no further question is asked), that recording is
+  deleted, and the report of the questions already asked is still written, marked interrupted.
 - **Report.** A real run, and a replay, write `reports/<run id>.json` and `.md`: model, date,
   price table version, correct rate, intent and parameter accuracy and coverage by block, cost,
   time and cache tokens read per question, and the total cost.
