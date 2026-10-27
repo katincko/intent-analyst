@@ -102,7 +102,7 @@ Both are stated in this repository on purpose.
   `thinking` block. A fixture in `tests/conftest.py` refuses any socket connection
   (`tests/test_no_network.py`). The CI holds no API key.
 - **Pinned supply chain.** GitHub Actions are pinned by commit SHA, the workflow has read-only
-  permissions, `setup-uv` caches the install, and Dependabot watches actions and pip.
+  permissions, `setup-uv` caches the install, and Dependabot watches actions and uv.
 - **Reproducible data.** The generation script pins the Synthea version, the jar checksum, the Docker
   image digest, the seeds and the dates (`tests/test_generation_script.py`).
 
