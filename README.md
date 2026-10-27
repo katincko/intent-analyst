@@ -26,7 +26,7 @@ The model never sees SQL. It gets six tools, and the code runs each of them:
 | Tool | What it does |
 |---|---|
 | `list_intents` | Returns the catalog with parameters and an example per intent. |
-| `search_values` | Finds real names in the data (condition, medication, procedure, encounter, patient name) by a bound, case-insensitive search. |
+| `search_values` | Finds real names in the data (condition, medication, medication reason, procedure, encounter, patient name) by a bound, case-insensitive search. |
 | `run_intent` | Validates the parameters, assembles the SQL, runs it on the locked read-only database and returns a table with a `result_id`. Up to 3 per question. |
 | `ask_clarification` | Ends the turn with a question to the user. |
 | `answer` | Ends the turn with a text and the `result_id`s it rests on. |
