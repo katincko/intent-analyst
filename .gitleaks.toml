@@ -1,0 +1,15 @@
+# Default rules plus a path allowlist for generated folders that are not part of the repository.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "folders that git ignores"
+paths = [
+  '''(^|/)\.venv/''',
+  '''(^|/)\.work/''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.mypy_cache/''',
+  '''(^|/)\.ruff_cache/''',
+  '''(^|/)\.pytest_cache/''',
+  '''(^|/)__pycache__/''',
+]

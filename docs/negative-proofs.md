@@ -179,3 +179,16 @@ plant and seeing it green. Nothing planted was committed.
 | # | Planted bug | Red result and reason | Green after restore |
 |---|---|---|---|
 | D1 | an em dash (U+2014) appended to `README.md` | the script exits 1 with `README.md:87: em dash (U+2014)`, and `test_repository_has_no_dash` fails with `assert 1 == 0` | yes, `git checkout README.md` |
+
+### Secret scan (`scripts/gitleaks.sh`, gitleaks 8.30.1)
+
+The binary is downloaded from the release page and its SHA-256 is compared with the value pinned in
+the script before it runs. The script scans the history (`gitleaks git`) and the working tree
+(`gitleaks dir`), so an uncommitted file is caught too.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| L1 | an untracked `planted_secret.txt` holding a fake AWS access key id (`AKIA` plus 16 characters) | the history scan says `no leaks found`, the tree scan says `leaks found: 1`, the script exits 1 | yes, file deleted, never added |
+
+A first plant with a 9 in the key was not flagged, because the AWS rule only accepts the
+characters A to Z and 2 to 7 after `AKIA`. The plant above matches the rule.
