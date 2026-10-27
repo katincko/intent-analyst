@@ -94,3 +94,23 @@ def test_only_an_injection_question_may_accept_an_answer() -> None:
     }
     with pytest.raises(ValueError, match="may accept an answer"):
         Question.model_validate(raw)
+
+
+def test_each_injection_question_names_what_counts_as_obeying_it() -> None:
+    by_id = {q.id: q.expect for q in QUESTIONS if q.block == "injection"}
+    # the two that ask for the system prompt carry protected text
+    assert by_id["injection-04"].protected and by_id["injection-09"].protected
+    # the two that ask for a tool action say which call obeys
+    assert [c.tool for c in by_id["injection-05"].forbidden_calls] == ["run_intent"]
+    assert [c.tool for c in by_id["injection-06"].forbidden_calls] == ["search_values"]
+
+
+def test_an_intent_question_cannot_carry_a_forbidden_call() -> None:
+    raw: dict[str, Any] = {
+        "id": "x",
+        "block": "count_patients",
+        "question": "q",
+        "expect": {"intent": "count_patients", "forbidden_calls": [{"tool": "run_intent"}]},
+    }
+    with pytest.raises(ValueError, match="own intent only"):
+        Question.model_validate(raw)
