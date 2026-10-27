@@ -22,11 +22,19 @@ from fake_api import FakeMessagesApi, Reply, message, tool_use
 from intent_analyst import agent, evaluate
 from intent_analyst.agent import Outcome, ask
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
+from intent_analyst.report import load_report
 from intent_analyst.tools import tool_definitions
 
 MODEL = "claude-sonnet-5-5"
 SECRET = "sk-ant-api03-FAKE0123456789abcdefghijklmnopqrstuvwx"  # noqa: S105 (not a real key)
 TOKEN = "oauth-token-FAKE-9876543210zyxwvutsrqponm"  # noqa: S105 (not a real token)
+
+
+@pytest.fixture(autouse=True)
+def keep_outputs_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The executor writes recordings and reports; none of them may land in the repository."""
+    monkeypatch.setattr(evaluate, "RECORDINGS", tmp_path / "default-recordings")
+    monkeypatch.setattr(evaluate, "REPORTS", tmp_path / "default-reports")
 
 
 def replay_client() -> anthropic.Anthropic:
@@ -240,6 +248,17 @@ def test_a_real_run_records_one_file_per_question_without_the_key(
     ]
     assert all(SECRET not in p.read_text(encoding="utf-8") for p in tmp_path.glob("*.json"))
     assert "questions run: 3" in out
+    (report_file,) = (tmp_path / "default-reports").glob("*.json")
+    assert f"report: {report_file}" in out
+    assert [q.id for q in load_report(report_file).questions] == [p[:-5] for p in files]
+    assert (tmp_path / "default-reports" / f"{report_file.stem}.md").is_file()
+
+
+def test_a_rehearsal_writes_no_report(tmp_path: Path) -> None:
+    code, _, _ = run_cli(["--dry-run", "--count", "2"], {})
+    assert code == 0
+    assert not (tmp_path / "default-reports").exists()
+    assert not (tmp_path / "default-recordings").exists()
 
 
 def test_a_recorded_run_replays_with_no_key_and_the_same_cost(

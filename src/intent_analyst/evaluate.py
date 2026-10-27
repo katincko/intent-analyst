@@ -40,12 +40,15 @@ from intent_analyst.evaluation import (
 from intent_analyst.pricing import PRICES
 from intent_analyst.questions import QUESTIONS_PATH, Question, load_questions
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
+from intent_analyst.report import build_report, write_report
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_TOTAL_USD = Decimal("2.00")
 KEY_VARIABLE = "ANTHROPIC_API_KEY"
 ROOT = Path(__file__).resolve().parents[2]
 RECORDINGS = ROOT / "recordings"
+REPORTS = ROOT / "reports"
+REPORTS = ROOT / "reports"
 
 
 def worst_case_client(
@@ -121,6 +124,7 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
     p.add_argument("--record-dir", type=Path, help="where the recordings go (default: by run id)")
     p.add_argument("--replay", type=Path, metavar="DIR", help="replay the recordings in DIR")
+    p.add_argument("--report-dir", type=Path, help="where the report goes (default: reports/)")
     p.add_argument("--dry-run", action="store_true", help="rehearse against a stand-in, no network")
     p.add_argument("--yes", action="store_true", help="spend real money without asking again")
     return p.parse_args(argv)
@@ -216,8 +220,13 @@ def main(
         label = f"replay of {directory}"
     else:
         label = f"real run, recordings in {directory}"
-    print(f"{label}, {time.monotonic() - started:.1f} s", file=out)
+    seconds = time.monotonic() - started
+    print(f"{label}, {seconds:.1f} s", file=out)
     print("\n".join(_summary(run)), file=out)
+    if not args.dry_run:  # a rehearsal has no answers worth a report
+        report = build_report(run, run_id, f"{now():%Y-%m-%d}", seconds)
+        for written in write_report(report, args.report_dir or REPORTS):
+            print(f"report: {written}", file=out)
     return 0
 
 

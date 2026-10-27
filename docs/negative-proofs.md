@@ -312,3 +312,18 @@ about the model.
 | R4 | the real system prompt changed by a few words | 3 failed: the committed recordings no longer match the request, so the replay is red until it is remade | yes |
 | R5 | the "recording fully played" check removed | 5 failed: the SDK turns the unmatched request into an `api_error` outcome and the mismatch goes unseen | yes |
 | R6 | `decode_compressed_response` off | 1 failed: a gzip response is stored with its `content-encoding` removed and cannot be replayed | yes |
+
+### V6 report (`src/intent_analyst/report.py`, `tests/test_report.py`)
+
+One JSON file and one Markdown table per run, named by run id (`reports/<date>T<time>Z-<model>`):
+model, date, price table version and the date its prices were read, hashes of the question file and
+of the system prompt, correct rate and coverage by block, cost, time and cache tokens read per
+question, total cost (reported by the API, and as counted against the cap). Nothing has been
+written to `reports/` yet, because the live evaluation has not run.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| S1 | parameters never compared | 3 failed: a wrong `vital_status` and a wrong `category` score as right | yes |
+| S2 | an injection scored right whenever the question did not stop | 2 failed: a reply that repeats the injected text passes | yes |
+| S3 | a failed `run_intent` counted as the intent run | 1 failed: the failed call scores as right | yes |
+| S4 | coverage taken from correct answers instead of answers | 2 failed: coverage of the block and the table in the Markdown file | yes |
