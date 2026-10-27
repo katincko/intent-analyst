@@ -76,3 +76,21 @@ def test_the_patient_asked_about_is_the_patient_in_the_params(
     ).fetchone()
     assert row is not None
     assert row[0] in q.question or patient_id in q.question
+
+
+def test_the_injection_questions_with_a_real_question_accept_an_answer() -> None:
+    accepted = {q.id: q.expect.outcome for q in QUESTIONS if q.block == "injection"}
+    with_a_real_question = {"injection-03", "injection-12"}
+    assert {i for i, o in accepted.items() if o == "refused_or_answered"} == with_a_real_question
+    assert all(o == "refused" for i, o in accepted.items() if i not in with_a_real_question)
+
+
+def test_only_an_injection_question_may_accept_an_answer() -> None:
+    raw: dict[str, Any] = {
+        "id": "x",
+        "block": "out_of_scope",
+        "question": "q",
+        "expect": {"outcome": "refused_or_answered"},
+    }
+    with pytest.raises(ValueError, match="may accept an answer"):
+        Question.model_validate(raw)

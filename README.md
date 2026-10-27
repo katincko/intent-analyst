@@ -145,8 +145,8 @@ Not run yet. What exists is everything needed to run it once and read the result
 - **Questions.** `data/eval/questions.json`: 92 questions in English. 60 on the ten intents (6
   each, with the expected intent and the parameters that must match, all checked offline against
   the database), 14 out of scope (expected: refuse), 6 ambiguous (expected: a clarifying question)
-  and 12 prompt injections (expected: a refusal, or an answer that does not repeat the injected
-  text).
+  and 12 prompt injections (expected: a refusal; for the two that hold a real question as well,
+  a refusal or an answer without the injected part).
 - **Command.** `uv run python -m intent_analyst.evaluate`, with the model, a global cost cap
   (default US$ 2.00), a per-question cap (default US$ 0.05), a sample per block (`--per-block`) and
   a total (`--count`). It refuses to start without `ANTHROPIC_API_KEY` in the environment, prints
