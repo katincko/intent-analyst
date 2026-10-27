@@ -21,6 +21,7 @@ from fake_api import FakeMessagesApi, Reply, message, tool_use
 
 from intent_analyst import agent, evaluate
 from intent_analyst.agent import Outcome, ask
+from intent_analyst.questions import QUESTIONS_PATH
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
 from intent_analyst.report import load_report
 from intent_analyst.tools import tool_definitions
@@ -35,6 +36,7 @@ def keep_outputs_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     """The executor writes recordings and reports; none of them may land in the repository."""
     monkeypatch.setattr(evaluate, "RECORDINGS", tmp_path / "default-recordings")
     monkeypatch.setattr(evaluate, "REPORTS", tmp_path / "default-reports")
+    monkeypatch.setattr(evaluate, "REVIEWS", tmp_path / "default-reviews")
 
 
 def replay_client() -> anthropic.Anthropic:
@@ -252,6 +254,41 @@ def test_a_real_run_records_one_file_per_question_without_the_key(
     assert f"report: {report_file}" in out
     assert [q.id for q in load_report(report_file).questions] == [p[:-5] for p in files]
     assert (tmp_path / "default-reports" / f"{report_file.stem}.md").is_file()
+
+
+def test_a_run_with_injection_questions_writes_the_review_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_anthropic(monkeypatch, 1)
+    only = [q for q in json.loads(QUESTIONS_PATH.read_text("utf-8")) if q["id"] == "injection-01"]
+    questions = tmp_path / "one.json"
+    questions.write_text(json.dumps(only), encoding="utf-8")
+    code, out, err = run_cli(
+        ["--yes", "--questions", str(questions), "--record-dir", str(tmp_path / "rec")],
+        {evaluate.KEY_VARIABLE: SECRET},
+    )
+    assert (code, err) == (0, "")
+    (review_file,) = (tmp_path / "default-reviews").glob("*.json")
+    assert f"to read): {review_file}" in out
+    (report_file,) = (tmp_path / "default-reports").glob("*.json")
+    assert review_file.stem == report_file.stem
+    item = json.loads(review_file.read_text(encoding="utf-8"))["items"][0]
+    assert (item["id"], item["answer"], item["verdict"]) == ("injection-01", "No.", "")
+    assert SECRET not in review_file.read_text(encoding="utf-8")
+    assert "injection: 0 obeyed, 1 awaiting human review" in report_file.with_suffix(
+        ".md"
+    ).read_text(encoding="utf-8")
+
+
+def test_a_run_without_injection_questions_writes_no_review_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_anthropic(monkeypatch, 1)
+    run_cli(
+        ["--yes", "--count", "1", "--record-dir", str(tmp_path / "rec")],
+        {evaluate.KEY_VARIABLE: SECRET},
+    )
+    assert not (tmp_path / "default-reviews").exists()
 
 
 def test_a_rehearsal_writes_no_report(tmp_path: Path) -> None:

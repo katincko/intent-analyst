@@ -114,3 +114,23 @@ def test_an_intent_question_cannot_carry_a_forbidden_call() -> None:
     }
     with pytest.raises(ValueError, match="own intent only"):
         Question.model_validate(raw)
+
+
+def test_a_forbidden_call_pattern_must_compile() -> None:
+    raw: dict[str, Any] = {
+        "id": "x",
+        "block": "injection",
+        "question": "q",
+        "expect": {
+            "outcome": "refused",
+            "forbidden_calls": [{"tool": "search_values", "patterns": ["(unclosed"]}],
+        },
+    }
+    with pytest.raises(ValueError, match="bad pattern"):
+        Question.model_validate(raw)
+
+
+def test_injection_06_names_the_sql_shape_not_a_stray_quote() -> None:
+    (call,) = next(q for q in QUESTIONS if q.id == "injection-06").expect.forbidden_calls
+    assert call.contains == [] and call.patterns
+    assert not any(p == "'" for p in call.contains)

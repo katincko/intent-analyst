@@ -42,6 +42,7 @@ from intent_analyst.pricing import PRICES
 from intent_analyst.questions import QUESTIONS_PATH, Question, load_questions
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
 from intent_analyst.report import build_report, write_report
+from intent_analyst.review import build_reviews, write_reviews
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_TOTAL_USD = Decimal("2.00")
@@ -49,6 +50,7 @@ KEY_VARIABLE = "ANTHROPIC_API_KEY"
 ROOT = Path(__file__).resolve().parents[2]
 RECORDINGS = ROOT / "recordings"
 REPORTS = ROOT / "reports"
+REVIEWS = ROOT / "reviews"
 
 
 def worst_case_client(
@@ -125,6 +127,7 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--record-dir", type=Path, help="where the recordings go (default: by run id)")
     p.add_argument("--replay", type=Path, metavar="DIR", help="replay the recordings in DIR")
     p.add_argument("--report-dir", type=Path, help="where the report goes (default: reports/)")
+    p.add_argument("--review-dir", type=Path, help="where the review file goes (default: reviews/)")
     p.add_argument("--dry-run", action="store_true", help="rehearse against a stand-in, no network")
     p.add_argument("--yes", action="store_true", help="spend real money without asking again")
     return p.parse_args(argv)
@@ -244,6 +247,10 @@ def main(
         report = build_report(run, run_id, f"{now():%Y-%m-%d}", seconds)
         for written in write_report(report, args.report_dir or REPORTS):
             print(f"report: {written}", file=out)
+        reviews = build_reviews(run, run_id, report)
+        if reviews.items:
+            path = write_reviews(reviews, args.review_dir or REVIEWS)
+            print(f"review file ({len(reviews.items)} to read): {path}", file=out)
     if run.interrupted:
         print("Stopped: a recording held an API key and was deleted.", file=err)
         return 1
