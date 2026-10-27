@@ -1,4 +1,4 @@
-.PHONY: test lint secrets dashes
+.PHONY: test lint secrets dashes verify
 
 # Names every test file instead of passing the directory.
 TEST_FILES := $(sort $(wildcard tests/test_*.py))
@@ -18,3 +18,10 @@ secrets:
 # No em dash or en dash in any tracked text file.
 dashes:
 	uv run python scripts/check_dashes.py
+
+# The one gate: runs in this order and stops at the first failure.
+verify:
+	$(MAKE) lint
+	$(MAKE) test
+	$(MAKE) secrets
+	$(MAKE) dashes
