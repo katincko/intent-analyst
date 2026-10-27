@@ -288,7 +288,7 @@ def test_the_request_has_the_expected_shape(con: duckdb.DuckDBPyConnection) -> N
     ]
     assert all(t["input_schema"]["type"] == "object" for t in body["tools"])
     assert body["max_tokens"] > 0
-    assert "no SQL" in body["system"]
+    assert "no SQL" in body["system"][0]["text"]
 
 
 def test_list_intents_returns_the_whole_catalog(con: duckdb.DuckDBPyConnection) -> None:
