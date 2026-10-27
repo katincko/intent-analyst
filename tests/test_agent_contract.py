@@ -13,6 +13,7 @@ import anthropic
 import duckdb
 import httpx2
 import pytest
+from anthropic.types import MessageParam
 from fake_api import (
     FakeMessagesApi,
     Reply,
@@ -63,12 +64,16 @@ def test_the_fake_rejects_a_broken_contract() -> None:
     wrong_id = {**result, "tool_use_id": "toolu_zzz"}
     assert contract_problem({"messages": [*head, {"role": "user", "content": [wrong_id]}]})
     api = FakeMessagesApi([])
+    broken: list[MessageParam] = [  # text where the tool_result must be, typed for the SDK
+        {"role": "user", "content": "Q?"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "toolu_a", "name": "list_intents", "input": {}}],
+        },
+        {"role": "user", "content": [{"type": "text", "text": "x"}]},
+    ]
     with pytest.raises(anthropic.BadRequestError):
-        api.client().messages.create(
-            model="claude-sonnet-5-5",
-            max_tokens=10,
-            messages=[*head, {"role": "user", "content": [note]}],  # type: ignore[list-item]
-        )
+        api.client().messages.create(model="claude-sonnet-5-5", max_tokens=10, messages=broken)
 
 
 def test_one_tool_use_gets_one_tool_result_with_the_same_id(
