@@ -230,3 +230,16 @@ inside `BEGIN`.
 | A13 | `usage` cost never added | 7 failed in `tests/test_limits.py`: no cost limit ever fires | yes |
 | A9b | cost limit doubled | 6 failed in `tests/test_limits.py` | yes |
 | A8 | step limit `>` instead of `>=` | 2 failed in `tests/test_limits.py` | yes |
+
+### V2 question set (`data/eval/questions.json`, `tests/test_questions.py`)
+
+92 questions: 60 on the ten intents (6 each), 14 out of scope, 6 ambiguous, 12 injections. The
+expected values are real: conditions, medication reasons, years and patient ids were read from the
+database. The offline test runs every expected intent through the assembler against the database
+and requires a non-empty table.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| Q1 | `Gingivitis (disorder)` misspelled in the expected params of `condition_prevalence-01` | 1 failed: `with_condition` sums to 0, so the expected answer does not exist | yes |
+| Q2 | `group_by` written `groupby` in `count_patients-01` | 1 failed: pydantic `ValidationError` for `CountPatients` (unknown and missing field) | yes |
+| Q3 | `name_contains` set to `insulinn` in `top_medications-02` | 1 failed: the table is empty | yes |
