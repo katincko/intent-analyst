@@ -194,3 +194,39 @@ the script before it runs. The script scans the history (`gitleaks git`) and the
 
 A first plant with a 9 in the key was not flagged, because the AWS rule only accepts the
 characters A to Z and 2 to 7 after `AKIA`. The plant above matches the rule.
+
+## Lot 6
+
+Dependencies moved to `anthropic` 2.3.0 and `duckdb` 2.0.0. The proofs were repeated on the new
+versions: bug planted, red copied, restored, green again. Test files named on the command line.
+
+### DuckDB connection after 2.0.0 (`tests/test_database.py`)
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| D1 | `memory_limit` not set | 1 failed: `25.0 GiB` instead of `244.1 MiB` | yes |
+| D2 | `threads` not set | 1 failed: 8 instead of 2 | yes |
+| D3 | autoload turned on | 1 failed: setting is `True`, expected `False` | yes |
+| D4 | autoinstall turned on | 1 failed: setting is `True`, expected `False` | yes |
+| D5 | `lock_configuration` removed | 7 failed: `SET` no longer refused as locked | yes |
+| D6 | memory limit raised to 512MB | 1 failed: `488.2 MiB` instead of `244.1 MiB` | yes |
+| D7 | `THREADS = 8` | 1 failed: `assert 8 == 2` | yes |
+| D8 | `enable_external_access` turned on | 9 failed: file and network reads no longer refused | yes |
+| D9 | `read_only=False` | 5 failed: writes no longer refused | yes |
+
+The new tests `test_a_failed_query_does_not_poison_the_connection` and
+`test_the_poisoning_exists_inside_an_explicit_transaction` pin the 2.0 rule that a failed
+`execute()` aborts its transaction: the first shows the agent's autocommit connection keeps
+working after a failed tool query, the second shows the same failure does poison a connection
+inside `BEGIN`.
+
+### Tool-use contract and limits after `anthropic` 2.3.0
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| A1 | only the first `tool_result` of a turn is sent back | 4 failed in `tests/test_agent_contract.py`: the fake rejects a turn with several `tool_use` and one result | yes |
+| A12 | SDK retries left on (`max_retries=0` removed) | 2 failed in `tests/test_limits.py`: `'refused' != 'stopped'`, the scripted replies run out | yes |
+| A11 | request timeout fixed at 30 s | 1 failed: `30.0` instead of `6.0` for the third request | yes |
+| A13 | `usage` cost never added | 7 failed in `tests/test_limits.py`: no cost limit ever fires | yes |
+| A9b | cost limit doubled | 6 failed in `tests/test_limits.py` | yes |
+| A8 | step limit `>` instead of `>=` | 2 failed in `tests/test_limits.py` | yes |
