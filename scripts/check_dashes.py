@@ -1,8 +1,9 @@
 """Fails when a tracked text file holds an em dash (U+2014) or an en dash (U+2013).
 
 Usage: python scripts/check_dashes.py [path ...]
-Without paths it checks every file listed by `git ls-files`. Files that are not UTF-8 text are
-skipped.
+Without paths it checks every tracked file plus every untracked file that .gitignore does not
+ignore. A file with a NUL byte is binary and skipped; any other file must decode as UTF-8, or the
+check fails with a message.
 """
 
 import subprocess
@@ -15,7 +16,7 @@ FORBIDDEN = {chr(0x2014): "em dash (U+2014)", chr(0x2013): "en dash (U+2013)"}
 
 def tracked_files(root: Path) -> list[Path]:
     out = subprocess.run(  # noqa: S603
-        ["git", "ls-files", "-z"],  # noqa: S607
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
         cwd=root,
         check=True,
         capture_output=True,
@@ -25,9 +26,16 @@ def tracked_files(root: Path) -> list[Path]:
 
 def find_dashes(path: Path) -> list[str]:
     try:
-        text = path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
+        data = path.read_bytes()
+    except OSError:
+        # Listed by git but gone from disk (deleted, not yet staged): nothing to check.
         return []
+    if bytes([0]) in data:
+        return []
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        return [f"{path}: not valid UTF-8 ({error.reason} at byte {error.start})"]
     found = []
     for number, line in enumerate(text.splitlines(), start=1):
         for char, name in FORBIDDEN.items():
@@ -43,7 +51,7 @@ def main(argv: list[str]) -> int:
     for problem in problems:
         print(problem)
     if problems:
-        print(f"{len(problems)} dash(es) found. Use a comma, a colon or a hyphen.")
+        print(f"{len(problems)} problem(s) found. Use a comma, a colon or a hyphen, and save text as UTF-8.")
         return 1
     print(f"no em or en dash in {len(paths)} files")
     return 0
