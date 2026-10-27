@@ -92,3 +92,27 @@ def test_extension_autoload_and_autoinstall_are_off(
     assert _setting(con, flag) is False
     with pytest.raises(duckdb.Error, match="locked"):
         con.execute(f"SET {flag} = true")
+
+
+def test_a_failed_query_does_not_poison_the_connection(con: duckdb.DuckDBPyConnection) -> None:
+    """DuckDB 2.0: a failed `execute()` aborts the transaction it ran in, and later statements
+    raise TransactionException until a rollback. The agent reuses one connection after a failed
+    tool query, so it must stay in autocommit (never BEGIN) for the next query to run.
+    https://duckdb.org/docs/2.0/clients/python/migration.html
+    """
+    with pytest.raises(duckdb.CatalogException):
+        con.execute("SELECT * FROM no_such_table")
+    assert con.execute("SELECT count(*) FROM patients").fetchone() == (53,)
+
+
+def test_the_poisoning_exists_inside_an_explicit_transaction(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Keeps the test above honest: with BEGIN the same failure does poison the connection."""
+    con.execute("BEGIN")
+    with pytest.raises(duckdb.CatalogException):
+        con.execute("SELECT * FROM no_such_table")
+    with pytest.raises(duckdb.TransactionException):
+        con.execute("SELECT count(*) FROM patients")
+    con.execute("ROLLBACK")
+    assert con.execute("SELECT count(*) FROM patients").fetchone() == (53,)
