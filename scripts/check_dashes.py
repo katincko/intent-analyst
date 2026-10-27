@@ -51,7 +51,7 @@ def main(argv: list[str]) -> int:
     for problem in problems:
         print(problem)
     if problems:
-        print(f"{len(problems)} problem(s) found. Use a comma, a colon or a hyphen, and save text as UTF-8.")
+        print(f"{len(problems)} problem(s). Use a comma, a colon or a hyphen; save text as UTF-8.")
         return 1
     print(f"no em or en dash in {len(paths)} files")
     return 0

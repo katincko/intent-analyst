@@ -45,6 +45,8 @@ under test.
 | # | Planted bug | Red result | Green after restore |
 |---|---|---|---|
 | D1 | `memory_limit` not set | `25.0 GiB` instead of `244.1 MiB` | yes |
+| D2 | `git ls-files` called without `--others --exclude-standard` | `test_untracked_unignored_file_is_checked` fails: the script exits 0 with `no em or en dash in 0 files` instead of 1 | yes, restored from a copy |
+| D3 | a file that is not valid UTF-8 returns no problem, as before | `test_non_utf8_text_file_fails_with_message` fails: exit 0 with `no em or en dash in 1 files` instead of 1 | yes, restored from a copy |
 | D2 | `threads` not set | 8 instead of 2 | yes |
 | D3 | autoload turned on | setting is `True`, expected `False` | yes |
 | D4 | autoinstall turned on | setting is `True`, expected `False` | yes |
