@@ -6,10 +6,12 @@
 Answers questions about data by choosing intents from a closed catalog, never by writing free SQL.
 Independent reimplementation, no employer code or data.
 
-**Status.** The data, the catalog, the SQL assembler, the tool-use loop and the CI gate are built.
-The loop has only been tested against an in-memory fake of the Messages API: it has not run
-against the real API. The live evaluation, the recorded runs, the coverage table and the static
-page do not exist yet. This repository is private.
+**Status.** The data, the catalog, the SQL assembler, the tool-use loop, the CI gate and the
+live evaluation harness are built. Nothing has run against the real API yet: the loop and the
+harness are tested only against an in-memory fake of the Messages API, so there are no measured
+results, no coverage figure and no real recordings. Running the evaluation is a decision of the
+repository owner (see "The evaluation"). The static page does not exist yet. This repository is
+private.
 
 ## The problem
 
@@ -83,6 +85,7 @@ Both are stated in this repository on purpose.
 |---|---|
 | Python 3.12 with `uv` and a committed `uv.lock` | Reproducible installs, the same command locally and in CI. |
 | `anthropic` SDK | The official client; the loop is written on top of it. |
+| `vcrpy` (dev) | Records and replays the exchange with the API; it patches `httpx2`, the HTTP library under the SDK. |
 | `pydantic` | Validates every tool input, so a bad parameter is a recoverable error. |
 | DuckDB | See above. |
 | `pytest`, `ruff`, `mypy --strict` | One gate, `make verify`. |
@@ -113,6 +116,7 @@ Both are stated in this repository on purpose.
 | Steps | 6 | requests sent to the model; the seventh is never sent |
 | Cost | US$ 0.05 | the `usage` of each real response times the price table in `pricing.py` |
 | Time | 30 s | an injectable clock; each request gets only the time that is left as its HTTP timeout |
+| Request size | 60,000 bytes | the JSON body of a request; a larger one is never sent (`request_too_large`) |
 
 Each limit ends the question with a clear message and a `stop_reason`. Cost and time are checked
 after a response arrives, so a question can end at most one response over them. Cost and time are
@@ -133,6 +137,48 @@ The tests are in `tests/test_grounding.py`.
 Known gaps: numbers written as words ("three") are not checked; a number the user typed may be
 repeated even if it does not describe the result; a patient id copied from one table into the next
 call is validated by the catalog but not traced to its origin.
+
+## The evaluation
+
+Not run yet. What exists is everything needed to run it once and read the result.
+
+- **Questions.** `data/eval/questions.json`: 92 questions in English. 60 on the ten intents (6
+  each, with the expected intent and the parameters that must match, all checked offline against
+  the database), 14 out of scope (expected: refuse), 6 ambiguous (expected: a clarifying question)
+  and 12 prompt injections (expected: a refusal, or an answer that does not repeat the injected
+  text).
+- **Command.** `uv run python -m intent_analyst.evaluate`, with the model, a global cost cap
+  (default US$ 2.00), a per-question cap (default US$ 0.05), a sample per block (`--per-block`) and
+  a total (`--count`). It refuses to start without `ANTHROPIC_API_KEY` in the environment, prints
+  the most the run can cost and asks for `--yes` before it spends anything.
+- **A cap that cannot be passed.** A question stops once its cost is over its cap, so it can end at
+  most one response over. One response is bounded by the request size limit and by `max_tokens`.
+  A question starts only if what is left of the global cap covers that bound. The tests run the
+  worst case (every response as expensive as allowed) over the whole question set and show the
+  total stays under the cap, and they fail if the check is removed (`docs/negative-proofs.md`).
+  The bound assumes that a token covers at least one byte of the request.
+- **Rehearsal.** `--dry-run` runs the same code against an in-memory stand-in whose every response
+  is the most expensive one allowed. No network and no key. It prints the most the real run can
+  cost.
+- **Cache.** The tools and the system prompt are the stable prefix and carry `cache_control` (1
+  hour), and the report shows the tokens read from the cache per question. A prefix under the
+  model minimum (512 tokens on the 5.5 models) is silently not cached, so whether it works is
+  only known from a real run.
+- **Recordings.** A real run writes one recording per question under `recordings/<run id>/`
+  (vcrpy, which patches `httpx2`). Only an allow-list of headers is stored, so the key never
+  reaches the file, and a file that still holds a key is deleted. `--replay DIR` runs the loop
+  again from the recordings with no network, no key and no cost, and fails if the prompt, the
+  tools or the messages changed. The two recordings committed in `tests/cassettes/` were made
+  through the in-memory fake, not through the API.
+- **Report.** A real run, and a replay, write `reports/<run id>.json` and `.md`: model, date,
+  price table version, correct rate, intent and parameter accuracy and coverage by block, cost,
+  time and cache tokens read per question, and the total cost.
+
+```
+uv run python -m intent_analyst.evaluate --dry-run                       # the bill, no key
+uv run python -m intent_analyst.evaluate --model claude-haiku-5-5 --per-block 2 --yes
+uv run python -m intent_analyst.evaluate --replay recordings/<run id>   # offline
+```
 
 ## Data and privacy
 
@@ -173,17 +219,20 @@ uv run python scripts/check_dashes.py
 `make test` names every `tests/test_*.py` file on the command line instead of passing the
 directory. The suite makes no network call and needs no API key.
 
-There is no command line yet. The entry point is `intent_analyst.agent.ask(question, client=...,
-con=..., model=...)`, with a database from `intent_analyst.db.build_database` opened by
-`open_readonly`. It needs an Anthropic API key and has not been run against the real API.
+The evaluation is the command line (see "The evaluation"). The entry point of the loop is
+`intent_analyst.agent.ask(question, client=..., con=..., model=...)`, with a database from
+`intent_analyst.db.build_database` opened by `open_readonly`. It needs an Anthropic API key and has
+not been run against the real API.
 
 To regenerate the data, run `scripts/generate_data.sh`. It needs Docker (Java runs in a pinned
 container) and network access, and the output is byte-stable.
 
 ## Limitations
 
-- Not run against the real API. No evaluation exists, so the coverage rate is not measured.
-- No command line, no recorded runs, no static page.
+- Not run against the real API. The evaluation is built but has not run, so the coverage rate, the
+  accuracy and the cost per question are not measured, and whether the prompt cache is hit is not
+  known.
+- No real recordings and no static page.
 - Ten intents: anything else is refused by design.
 - The data is a 53-patient synthetic slice.
 - Grounding checks digits, not meaning (see the known gaps above).

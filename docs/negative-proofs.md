@@ -327,3 +327,12 @@ written to `reports/` yet, because the live evaluation has not run.
 | S2 | an injection scored right whenever the question did not stop | 2 failed: a reply that repeats the injected text passes | yes |
 | S3 | a failed `run_intent` counted as the intent run | 1 failed: the failed call scores as right | yes |
 | S4 | coverage taken from correct answers instead of answers | 2 failed: coverage of the block and the table in the Markdown file | yes |
+
+### V7 the four proofs the spec names
+
+| Spec item | Proof | Where |
+|---|---|---|
+| Global cap removed: the rehearsal passes US$ 2 and the test is red | T1 and T2: with the check against what is left removed, or reduced to the question cap, the worst-case rehearsal of sonnet and opus ends above US$ 2.00 and 6 to 8 tests fail | V3 table |
+| Key inside the recording: red | R1 (the header allow-list removed, the key is written) and R2 (the final scan removed, a key echoed by a response stays in the file) | V5 table |
+| Prompt changed: the replay is red | R4 (the real prompt changed by a few words turns the committed recordings red) and the tests that change the prompt, a tool, a message or the model | V5 table |
+| Question with a wrong expected parameter: red | Q1, Q2 and Q3 | V2 table |
