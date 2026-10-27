@@ -156,3 +156,7 @@ Runs: `uv run pytest <file> -q`, files named. Bug planted, red copied, restored 
 | # | Planted bug | Red result and reason | Green after restore |
 |---|---|---|---|
 | Q1 | grounding scan back to the old rule (a number glued to a letter is not read as a number) | 9 failed: `assert [] == ['99k']`, same for `99x`, `1e3`, `2nd`, `v2`, and `['1.2'] == ['1.2.3']` | yes |
+| Q2a | normal path: the ids of the first two results swapped | 2 failed (the new pairing test and the older ordering test): `['toolu_search', ...] == ['toolu_table', ...]` | yes |
+| Q2b | normal path: every result carries the id of the first call | 4 failed: `'stopped' == 'answered'`, the fake answers 400 and the loop reports `api_error` | yes |
+| Q2c | cut turn: results built from `reversed(calls)` | 1 failed (new, the only one that sees it): `['toolu_cut_c', ..., 'toolu_cut_a'] == ['toolu_cut_a', ..., 'toolu_cut_c']` | yes |
+| Q2d | cut turn: every result carries the id of the first call | 1 failed: `'stopped' == 'refused'` (fake 400) | yes |

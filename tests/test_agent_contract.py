@@ -104,6 +104,51 @@ def test_several_tool_uses_in_one_turn_get_all_results_in_one_message(
     assert [b["type"] for b in last] == ["tool_result"] * 3  # one message, results only
 
 
+def test_each_tool_result_carries_the_id_of_the_call_that_made_it(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """The fake only compares the set of ids, so the pairing is checked here, by content."""
+    calls = [
+        tool_use("run_intent", GENDER, id="toolu_table"),
+        tool_use("search_values", {"field": "condition", "text": "sinus"}, id="toolu_search"),
+        tool_use("list_intents", {}, id="toolu_catalog"),
+        tool_use("run_intent", {"intent": "no_such_intent"}, id="toolu_bad"),
+    ]
+    api = FakeMessagesApi([Reply(message(calls)), Reply(message([answer_call(TOTAL, ["r1"])]))])
+    assert run(con, api).status == "answered"
+    by_id = {r["tool_use_id"]: r for r in results_of(api.requests[1])}
+    assert list(by_id) == ["toolu_table", "toolu_search", "toolu_catalog", "toolu_bad"]
+    table = json.loads(by_id["toolu_table"]["content"])
+    assert (table["result_id"], table["columns"][0]) == ("r1", "bucket")
+    search = json.loads(by_id["toolu_search"]["content"])
+    assert search["result_id"] == "r2"
+    assert search["columns"] != table["columns"]
+    catalog = json.loads(by_id["toolu_catalog"]["content"])
+    assert [i["name"] for i in catalog] == list(INTENTS)
+    assert by_id["toolu_bad"]["is_error"] is True
+    assert "no_such_intent" in by_id["toolu_bad"]["content"]
+    assert all("is_error" not in by_id[i] for i in ("toolu_table", "toolu_search", "toolu_catalog"))
+
+
+def test_a_cut_turn_with_several_tool_uses_answers_each_one_by_its_own_id(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    cut = message(
+        [
+            text("Let me look."),
+            tool_use("run_intent", GENDER, id="toolu_cut_a"),
+            tool_use("list_intents", {}, id="toolu_cut_b"),
+            tool_use("run_intent", GENDER, id="toolu_cut_c"),
+        ],
+        stop_reason="max_tokens",
+    )
+    api = FakeMessagesApi([Reply(cut), Reply(message([tool_use("refuse", {"reason": "No."})]))])
+    assert run(con, api).status == "refused"
+    results = results_of(api.requests[1])
+    assert [r["tool_use_id"] for r in results] == ["toolu_cut_a", "toolu_cut_b", "toolu_cut_c"]
+    assert all(r["is_error"] is True and "cut off" in r["content"] for r in results)
+
+
 def test_a_tool_error_is_returned_as_an_error_result_and_the_loop_continues(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
