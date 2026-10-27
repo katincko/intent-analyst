@@ -161,3 +161,5 @@ Runs: `uv run pytest <file> -q`, files named. Bug planted, red copied, restored 
 | Q2c | cut turn: results built from `reversed(calls)` | 1 failed (new, the only one that sees it): `['toolu_cut_c', ..., 'toolu_cut_a'] == ['toolu_cut_a', ..., 'toolu_cut_c']` | yes |
 | Q2d | cut turn: every result carries the id of the first call | 1 failed: `'stopped' == 'refused'` (fake 400) | yes |
 | Q3 | `agent.py` without the limit check right after a response is paid (the check before the next request stays) | 6 failed: `('answered', None) == ('stopped', 'max_cost')`, the same for `refused` and `clarification`, and the three time cases (`'timeout'`). The older limit tests stay green, because they use a non-final reply that the check before the next request still stops | yes |
+| Q4a | post-response time check `>` changed to `>=` | 2 failed: a final reply at exactly 30.0 s is `stopped` instead of `refused`, and the non-final case gets "over the 30 s limit" instead of "no time left" | yes |
+| Q4b | check before the next request `>=` changed to `>` | 1 failed: `('refused', None) == ('stopped', 'timeout')`, the loop sent a request with no time left | yes |

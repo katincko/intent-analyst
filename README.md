@@ -35,6 +35,9 @@ as a `tool_result` with `is_error`, at most 3 per question.
 
 Each limit ends the question with a clear message and a `stop_reason`. The cost and time limits
 are checked after a response arrives, so a question can finish at most one response over them.
+Cost and time are maxima: a final reply that lands exactly on US$ 0.05 or on 30.0 s is accepted, and
+30.1 s is not. A reply that is not final and lands exactly on 30.0 s ends the question before the
+next request, because no time is left to send it.
 SDK retries are off, so a failed call is reported once and cannot spend more money or time in
 the background.
 

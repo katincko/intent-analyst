@@ -136,6 +136,30 @@ def test_just_under_the_time_limit_is_allowed(con: duckdb.DuckDBPyConnection) ->
     assert run(con, api).status == "refused"
 
 
+@pytest.mark.parametrize(
+    ("takes", "status"), [(29.9, "refused"), (30.0, "refused"), (30.1, "stopped")]
+)
+def test_a_final_reply_that_arrives_at_most_at_the_time_limit_is_accepted(
+    con: duckdb.DuckDBPyConnection, takes: float, status: str
+) -> None:
+    """Time follows the cost rule: the limit is a maximum, so exactly 30.0 s is still allowed."""
+    outcome = run(con, FakeMessagesApi([refusing(takes=takes)]))
+    assert outcome.status == status
+    assert outcome.stop_reason == (None if status == "refused" else "timeout")
+
+
+def test_a_non_final_reply_at_exactly_the_time_limit_stops_before_the_next_request(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    api = FakeMessagesApi([looking(takes=30.0), refusing()])
+    outcome = run(con, api)
+    assert (outcome.status, outcome.stop_reason) == ("stopped", "timeout")
+    assert len(api.requests) == 1  # no time is left, so the second request is never sent
+    assert "no time left" in outcome.message and "30.0 s" in outcome.message
+    assert "30 s" in outcome.message
+    assert outcome.seconds == 30.0
+
+
 def test_time_adds_up_and_each_request_gets_only_the_time_that_is_left(
     con: duckdb.DuckDBPyConnection,
 ) -> None:

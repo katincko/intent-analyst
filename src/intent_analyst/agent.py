@@ -8,7 +8,8 @@ Limits per question (all checked after every response, before it is acted on):
 * steps: at most `max_steps` requests to the model;
 * cost: at most `max_usd`, from the `usage` of each response and the versioned price table. The
   cap is checked after the spend, so a question can end up to one response over it;
-* time: at most `max_seconds` on an injectable clock, and the HTTP timeout of each request is
+* time: at most `max_seconds` on an injectable clock (exactly the limit is still allowed for a
+  reply, but no new request starts with no time left), and the HTTP timeout of each request is
   the time that is left.
 
 No `tool_choice` is sent (current models reject a forced tool): the model is steered by the
@@ -205,7 +206,12 @@ class _Question:
     def _stop(self, reason: StopReason, message: str) -> Outcome:
         return self._outcome("stopped", message, reason)
 
-    def _limit_hit(self) -> Outcome | None:
+    def _limit_hit(self, before_request: bool = False) -> Outcome | None:
+        """Time and cost are maxima: a response that lands exactly on a limit is accepted.
+
+        Before the next request, though, a time budget that is used up (elapsed == limit) leaves
+        nothing to send it with, so that check also stops at equality.
+        """
         if self.cost > self.limits.max_usd:
             return self._stop(
                 "max_cost",
@@ -213,10 +219,16 @@ class _Question:
                 f"${self.limits.max_usd} limit.",
             )
         elapsed = self.clock() - self.started
-        if elapsed >= self.limits.max_seconds:
+        if elapsed > self.limits.max_seconds:
             return self._stop(
                 "timeout",
                 f"Stopped: {elapsed:.1f} s elapsed, over the {self.limits.max_seconds:g} s limit.",
+            )
+        if before_request and elapsed >= self.limits.max_seconds:
+            return self._stop(
+                "timeout",
+                f"Stopped: {elapsed:.1f} s elapsed, no time left for another request "
+                f"(limit {self.limits.max_seconds:g} s).",
             )
         return None
 
@@ -231,7 +243,7 @@ class _Question:
                     f"Stopped: the limit of {self.limits.max_steps} steps was reached "
                     "without a final answer.",
                 )
-            if (hit := self._limit_hit()) is not None:
+            if (hit := self._limit_hit(before_request=True)) is not None:
                 return hit
             remaining = self.limits.max_seconds - (self.clock() - self.started)
             self.steps += 1
