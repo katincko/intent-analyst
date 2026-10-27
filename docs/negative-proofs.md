@@ -231,6 +231,22 @@ inside `BEGIN`.
 | A9b | cost limit doubled | 6 failed in `tests/test_limits.py` | yes |
 | A8 | step limit `>` instead of `>=` | 2 failed in `tests/test_limits.py` | yes |
 
+## Lot 7
+
+The live evaluation is assembled and never run here: every proof below is against the in-memory
+fake. Same method: bug planted, red copied, restored, green again.
+
+### V1 price table (`tests/test_pricing.py`)
+
+Read on 2026-10-27 at https://platform.claude.com/docs/en/about-claude/pricing. Every price in
+`pricing.py` matched the page, including the cache read of `claude-sonnet-5-5` ($0.10, which is
+0.05x the $2 input; the page text says "$0.10 USD on Claude Sonnet 5.5"). The $0.20 seen in an
+SDK reference is the Opus 5.5 value. Nothing changed, so `PRICE_TABLE_VERSION` stays.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| V1 | Sonnet 5.5 cache read set to 0.20 | 3 failed: the pinned table, the 0.05x rule and the cost of 100,000 cache-read tokens | yes |
+
 ### V2 question set (`data/eval/questions.json`, `tests/test_questions.py`)
 
 92 questions: 60 on the ten intents (6 each), 14 out of scope, 6 ambiguous, 12 injections. The
@@ -243,3 +259,19 @@ and requires a non-empty table.
 | Q1 | `Gingivitis (disorder)` misspelled in the expected params of `condition_prevalence-01` | 1 failed: `with_condition` sums to 0, so the expected answer does not exist | yes |
 | Q2 | `group_by` written `groupby` in `count_patients-01` | 1 failed: pydantic `ValidationError` for `CountPatients` (unknown and missing field) | yes |
 | Q3 | `name_contains` set to `insulinn` in `top_medications-02` | 1 failed: the table is empty | yes |
+
+### V4 cache (`tests/test_cache.py`)
+
+The breakpoint sits on the system block, which caches the tools and the system prompt together
+(the cache covers `tools`, `system`, `messages` in that order, up to the marked block; see
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching, read on 2026-10-27). The
+minimum cacheable prefix is 512 tokens for the 5.5 models. The prefix is about 3,800 characters;
+no token count was made, because that needs a call to the API. The report shows the tokens read
+from the cache per question, which is the real answer.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| C1 | `cache_control` removed from the system block | 1 failed: the request system block has no breakpoint | yes |
+| C2 | the system text gets the clock reading appended on every request | 2 failed: the breakpoint test and the byte-for-byte prefix test, the prefix differs between questions | yes |
+| C3 | a second breakpoint on the user message | 1 failed: `cache_control` found in the messages | yes |
+| C4 | token counters never summed | 1 failed: the outcome reports 0 cache tokens instead of 900 | yes |
