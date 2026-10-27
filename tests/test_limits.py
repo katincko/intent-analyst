@@ -7,6 +7,7 @@ input tokens cost 0.02 dollars. The clock is injected: the fake API moves it by 
 
 from decimal import Decimal
 from types import SimpleNamespace
+from typing import Any
 
 import duckdb
 import httpx2
@@ -150,6 +151,49 @@ def test_a_request_that_times_out_ends_the_question(con: duckdb.DuckDBPyConnecti
     assert (outcome.status, outcome.stop_reason) == ("stopped", "timeout")
     assert "timed out" in outcome.message
     assert len(api.requests) == 1  # no hidden retry that would spend more time
+
+
+# ---- a final reply over a cap ----
+
+GENDER = {"intent": "count_patients", "params": {"group_by": "gender"}}
+FINAL_CALLS: dict[str, dict[str, Any]] = {
+    "answer": {"text": "27 patients are M.", "sources": ["r1"]},
+    "refuse": {"reason": "Out of scope."},
+    "ask_clarification": {"question": "Which year?"},
+}
+
+
+def final_reply(tool: str, takes: float = 0.0, input_tokens: int = 100) -> Reply:
+    body = message([tool_use(tool, FINAL_CALLS[tool])], token_usage=usage(input_tokens, 50))
+    return Reply(body, takes)
+
+
+def first_table() -> Reply:
+    return Reply(message([tool_use("run_intent", GENDER)], token_usage=usage(100, 50)))
+
+
+@pytest.mark.parametrize("tool", list(FINAL_CALLS))
+def test_a_final_reply_over_the_cost_limit_is_not_accepted(
+    con: duckdb.DuckDBPyConnection, tool: str
+) -> None:
+    api = FakeMessagesApi([first_table(), final_reply(tool, input_tokens=30_000)])
+    outcome = run(con, api)
+    assert (outcome.status, outcome.stop_reason) == ("stopped", "max_cost")
+    assert outcome.tables == []  # nothing from the rejected reply is handed back
+    assert "limit" in outcome.message and "$0.05" in outcome.message
+    assert [e.tool for e in outcome.events] == ["run_intent"]  # the final tool never ran
+
+
+@pytest.mark.parametrize("tool", list(FINAL_CALLS))
+def test_a_final_reply_over_the_time_limit_is_not_accepted(
+    con: duckdb.DuckDBPyConnection, tool: str
+) -> None:
+    api = FakeMessagesApi([first_table(), final_reply(tool, takes=31.0)])
+    outcome = run(con, api)
+    assert (outcome.status, outcome.stop_reason) == ("stopped", "timeout")
+    assert outcome.tables == []
+    assert "31.0 s" in outcome.message and "30 s" in outcome.message
+    assert [e.tool for e in outcome.events] == ["run_intent"]
 
 
 # ---- other ways to end ----
