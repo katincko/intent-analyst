@@ -79,6 +79,8 @@ argument), and `make lint` runs ruff and mypy.
 
 The suite makes no network call. The model client in the tests is a fake transport in memory
 (`tests/fake_api.py`) that answers in the real Messages API format and rejects, like the real
-API, a request that breaks the tool_use / tool_result rules. A guard in `tests/conftest.py`
+API, a request that breaks the tool_use / tool_result rules or that edits, drops or reorders the
+`thinking` and `redacted_thinking` blocks of the latest assistant turn. Its errors carry a
+`request_id` in the body and in the `request-id` header, and a stop caused by an API error shows it. A guard in `tests/conftest.py`
 refuses any socket connection. `docs/negative-proofs.md` lists, for every guard, the bug that was
 planted and the failure it caused.

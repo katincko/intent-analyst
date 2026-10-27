@@ -13,7 +13,17 @@ import anthropic
 import duckdb
 import httpx2
 import pytest
-from fake_api import FakeMessagesApi, Reply, contract_problem, message, text, tool_use
+from fake_api import (
+    FakeMessagesApi,
+    Reply,
+    contract_problem,
+    error_response,
+    message,
+    redacted_thinking,
+    text,
+    thinking,
+    tool_use,
+)
 
 from intent_analyst.agent import Outcome, ask
 from intent_analyst.catalog import INTENTS
@@ -303,3 +313,175 @@ def test_a_failed_api_call_ends_the_question_with_a_message(con: duckdb.DuckDBPy
     outcome = run(con, api)
     assert (outcome.status, outcome.stop_reason) == ("stopped", "api_error")
     assert "APIConnectionError" in outcome.message
+
+
+# ---- thinking blocks and request ids ----
+
+
+def sent_assistant(request: dict[str, Any], index: int = 1) -> list[dict[str, Any]]:
+    msg = request["messages"][index]
+    assert msg["role"] == "assistant"
+    return list(msg["content"])
+
+
+OMITTED = thinking("sig_a")
+HIDDEN = redacted_thinking("enc_b")
+SHOWN = thinking("sig_c", "hm")
+BOTH = [OMITTED, HIDDEN]
+
+
+def replay(sent: list[dict[str, Any]], issued: list[dict[str, Any]]) -> None:
+    """The fake issues `issued` + a tool_use, then gets that assistant turn back as `sent`."""
+    use = tool_use("list_intents", {}, id="toolu_t")
+    result = {"type": "tool_result", "tool_use_id": "toolu_t", "content": "ok"}
+    client = FakeMessagesApi(
+        [Reply(message([*issued, use])), Reply(message([text("ok")]))]
+    ).client()
+    head = [{"role": "user", "content": "Q?"}]
+    client.messages.create(model="claude-sonnet-5-5", max_tokens=10, messages=head)  # type: ignore[arg-type]
+    turns = [
+        *head,
+        {"role": "assistant", "content": [*sent, use]},
+        {"role": "user", "content": [result]},
+    ]
+    client.messages.create(model="claude-sonnet-5-5", max_tokens=10, messages=turns)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("sent", "issued"),
+    [
+        (BOTH, BOTH),
+        ([{**OMITTED, "thinking": "ignored"}, HIDDEN], BOTH),  # text of an empty block is ignored
+        ([SHOWN], [SHOWN]),
+    ],
+    ids=["intact", "text of an omitted block", "shown thinking intact"],
+)
+def test_the_fake_accepts_thinking_blocks_that_come_back_as_received(
+    sent: list[dict[str, Any]], issued: list[dict[str, Any]]
+) -> None:
+    replay(sent, issued)
+
+
+@pytest.mark.parametrize(
+    ("sent", "issued"),
+    [
+        ([{**OMITTED, "signature": "sig_x"}, HIDDEN], BOTH),
+        ([OMITTED, {**HIDDEN, "data": "enc_x"}], BOTH),
+        ([HIDDEN], BOTH),
+        ([OMITTED], BOTH),
+        ([], BOTH),
+        ([HIDDEN, OMITTED], BOTH),
+        ([{**SHOWN, "thinking": "other"}], [SHOWN]),
+    ],
+    ids=[
+        "edited signature",
+        "edited redacted data",
+        "dropped thinking",
+        "dropped redacted",
+        "dropped all",
+        "reordered",
+        "edited text of a shown block",
+    ],
+)
+def test_the_fake_rejects_a_changed_thinking_block(
+    sent: list[dict[str, Any]], issued: list[dict[str, Any]]
+) -> None:
+    """Guards the fake itself, so the loop tests below cannot pass vacuously.
+
+    Rule: the thinking and redacted_thinking blocks of the latest assistant message come back as
+    received (https://platform.claude.com/docs/en/build-with-claude/thinking, "Preserving thinking
+    blocks"); the error text is from the errors page, "Thinking blocks cannot be modified".
+    """
+    with pytest.raises(anthropic.BadRequestError, match="cannot be modified") as caught:
+        replay(sent, issued)
+    assert (caught.value.request_id or "").startswith("req_")
+
+
+def test_thinking_blocks_go_back_as_received_with_the_tool_results(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    first = message(
+        [
+            thinking("sig_one"),
+            redacted_thinking("enc_one"),
+            tool_use("run_intent", GENDER, id="toolu_t"),
+        ]
+    )
+    api = FakeMessagesApi(
+        [Reply(first), Reply(message([thinking("sig_two"), answer_call(TOTAL, ["r1"])]))]
+    )
+    assert run(con, api).status == "answered"
+    sent = sent_assistant(api.requests[1])
+    assert [b["type"] for b in sent] == ["thinking", "redacted_thinking", "tool_use"]
+    assert (sent[0]["signature"], sent[0]["thinking"], sent[1]["data"]) == (
+        "sig_one",
+        "",
+        "enc_one",
+    )
+
+
+def test_thinking_blocks_of_a_cut_turn_go_back_too(con: duckdb.DuckDBPyConnection) -> None:
+    cut = message(
+        [thinking("sig_cut"), redacted_thinking("enc_cut"), tool_use("run_intent", GENDER, "t1")],
+        stop_reason="max_tokens",
+    )
+    api = FakeMessagesApi([Reply(cut), Reply(message([tool_use("refuse", {"reason": "No."})]))])
+    assert run(con, api).status == "refused"
+    sent = sent_assistant(api.requests[1])
+    assert [b["type"] for b in sent] == ["thinking", "redacted_thinking", "tool_use"]
+
+
+def test_thinking_blocks_of_a_reply_without_a_tool_go_back_with_the_nudge(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    api = FakeMessagesApi(
+        [
+            Reply(message([thinking("sig_idle"), text("53 patients.")])),
+            Reply(message([tool_use("refuse", {"reason": "No."})])),
+        ]
+    )
+    assert run(con, api).status == "refused"
+    assert [b["type"] for b in sent_assistant(api.requests[1])] == ["thinking", "text"]
+
+
+def test_an_api_error_message_shows_the_request_id(con: duckdb.DuckDBPyConnection) -> None:
+    failure = error_response(429, "rate_limit_error", "slow down", request_id="req_test429")
+    outcome = run(con, FakeMessagesApi([failure]))
+    assert (outcome.status, outcome.stop_reason) == ("stopped", "api_error")
+    assert "req_test429" in outcome.message
+    assert "RateLimitError" in outcome.message and "slow down" in outcome.message
+
+
+def test_an_api_error_message_shows_the_request_id_of_the_header_alone(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """A proxy or gateway error may have no request_id in the body; the header still has it."""
+    body = {"type": "error", "error": {"type": "api_error", "message": "upstream broke"}}
+    failure = httpx2.Response(500, json=body, headers={"request-id": "req_header_only"})
+    outcome = run(con, FakeMessagesApi([failure]))
+    assert (outcome.status, outcome.stop_reason) == ("stopped", "api_error")
+    assert "req_header_only" in outcome.message
+    assert "InternalServerError" in outcome.message and "upstream broke" in outcome.message
+
+
+def test_an_api_error_without_any_request_id_still_stops_cleanly(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    failure = httpx2.Response(502, text="bad gateway")
+    outcome = run(con, FakeMessagesApi([failure]))
+    assert (outcome.stop_reason, "request_id" in outcome.message) == ("api_error", False)
+
+
+def test_the_fake_error_carries_the_id_in_the_body_and_the_header() -> None:
+    api = FakeMessagesApi([error_response(500, "api_error", "boom", request_id="req_abc")])
+    with pytest.raises(anthropic.InternalServerError) as caught:
+        api.client().with_options(max_retries=0).messages.create(
+            model="claude-sonnet-5-5",
+            max_tokens=10,
+            messages=[{"role": "user", "content": "Q?"}],
+        )
+    error = caught.value
+    assert error.request_id == "req_abc"  # read by the SDK from the `request-id` header
+    assert isinstance(error.body, dict) and error.body["request_id"] == "req_abc"
+    assert error.body["error"] == {"type": "api_error", "message": "boom"}
+    assert error.response.headers["request-id"] == "req_abc"

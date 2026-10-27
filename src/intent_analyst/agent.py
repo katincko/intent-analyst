@@ -137,6 +137,15 @@ def ask(
     return _Question(question, client, con, model, limits, clock).run()
 
 
+def _api_error_notice(error: anthropic.APIError) -> str:
+    """The stop message of a failed call, with the `request-id` header for the support ticket."""
+    notice = f"Stopped: the API call failed ({type(error).__name__}): {error}"
+    request_id = error.request_id if isinstance(error, anthropic.APIStatusError) else None
+    if request_id and request_id not in notice:  # the body of an API error already has it
+        notice += f" [request_id: {request_id}]"
+    return notice
+
+
 def _describe(error: ValidationError) -> str:
     return "; ".join(
         f"{'.'.join(str(p) for p in e['loc']) or 'input'}: {e['msg']}" for e in error.errors()
@@ -261,9 +270,7 @@ class _Question:
             except anthropic.APITimeoutError:
                 return self._stop("timeout", "Stopped: a request to the model timed out.")
             except anthropic.APIError as error:
-                return self._stop(
-                    "api_error", f"Stopped: the API call failed ({type(error).__name__}): {error}"
-                )
+                return self._stop("api_error", _api_error_notice(error))
             self.cost += cost_usd(self.model, response.usage)
             if (hit := self._limit_hit()) is not None:
                 return hit
