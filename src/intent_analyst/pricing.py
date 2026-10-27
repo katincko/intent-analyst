@@ -7,7 +7,10 @@ from typing import Protocol
 
 # Bump when a price below changes, and say where it was read.
 PRICE_TABLE_VERSION = "2026-10-16"
-# Source: https://platform.claude.com/docs/en/about-claude/pricing (read on the version date).
+# Source: https://platform.claude.com/docs/en/about-claude/pricing
+# Read again on PRICES_READ_ON: every price below matched the page, so the version stays.
+PRICES_READ_ON = "2026-10-27"
+# Cache reads of Opus 5.5 and Sonnet 5.5 are 0.05x the base input price ($0.20 and $0.10).
 
 _MILLION = Decimal(1_000_000)
 
