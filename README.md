@@ -93,8 +93,9 @@ Both are stated in this repository on purpose.
 - **One gate.** `make verify` runs, in order and stopping at the first failure: `ruff check`,
   `ruff format --check`, `mypy --strict`, the test suite with every file named, gitleaks and a
   check for em and en dashes. The CI runs the same command on every push and pull request.
-- **Negative proofs.** Every test or guard was proved by planting the bug, seeing it fail for the
-  right reason and restoring it. The list is in [`docs/negative-proofs.md`](docs/negative-proofs.md).
+- **Negative proofs.** The tests and guards listed in [`docs/negative-proofs.md`](docs/negative-proofs.md)
+  were proved by planting the bug, seeing it fail for the right reason and restoring it. Tests
+  not in that list have no recorded proof.
 - **No network in tests.** The model client is a fake transport in memory
   (`tests/fake_api.py`). It answers in the Messages API format and rejects what the real API
   rejects: a broken `tool_use` / `tool_result` pairing, or a changed, dropped or reordered
