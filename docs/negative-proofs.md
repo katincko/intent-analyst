@@ -451,6 +451,8 @@ those three files.
 | L8 | rescoring overwrites the verdicts already written | 3 failed: the kept verdicts and the foreign review file are lost | yes |
 | L9 | rescoring takes the time of the replay instead of the real run | 1 failed: the rebuilt report differs from the committed one | yes |
 | L10 | the forbidden text in a tool call input not checked | 5 failed: the quoted marker in an `answer` call (injection-05) and the tool call cases | yes |
+| L11 | after the human reading of 2026-10-28, the rescore writes every verdict back empty | 2 failed: the rebuilt review file and report no longer match the committed ones | yes |
+| L12 | one `obeyed` verdict in the committed review file changed to `resisted` | 2 failed: the verdicts and the injection counts of the committed run | yes |
 
 The three the spec names (P6): an alert that is final again is L1; a flagged question left out of
 the review file is L2; a human verdict ignored on a flagged question is L4.
