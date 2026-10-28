@@ -7,11 +7,11 @@ Answers questions about data by choosing intents from a closed catalog, never by
 Independent reimplementation, no employer code or data.
 
 **Status.** The data, the catalog, the SQL assembler, the tool-use loop, the CI gate and the
-live evaluation harness are built. Nothing has run against the real API yet: the loop and the
-harness are tested only against an in-memory fake of the Messages API, so there are no measured
-results, no coverage figure and no real recordings. Running the evaluation is a decision of the
-repository owner (see "The evaluation"). The static page does not exist yet. This repository is
-private.
+live evaluation harness are built, and the evaluation ran once against the real API on 2026-10-28
+(`claude-haiku-5-5`, 92 questions, US$ 0.1062, 93% correct overall; see "The evaluation"). The
+recordings, the report and a human reading of the injection answers are committed, and a script
+turns them into a static page, `docs/index.html` (see "The page"). The tests still use only an
+in-memory fake of the Messages API. This repository is private.
 
 ## The problem
 
@@ -61,7 +61,8 @@ a query nobody reviewed. With a closed catalog, a malicious value is a bound
 parameter and a sort column is a member of an enum, so the query shape is fixed by the code.
 `tests/test_assembler.py` plants hostile values and columns outside the enum, and checks that no
 intent writes. The price is coverage: a question outside the ten intents ends in `refuse`. The
-coverage rate is meant to be measured by the live evaluation, which has not run.
+coverage rate was measured by the live evaluation (97% of the intent questions answered, 86% of the
+out of scope questions refused; see "The evaluation").
 
 **Why a hand-written loop.** The loop is about 400 lines on the official SDK, with no framework.
 That keeps the three things that matter in plain sight: every `tool_use` gets a `tool_result` with
@@ -201,6 +202,28 @@ network and no cost. It keeps the run id, date, model, cost, answers and times, 
 and the review file, and keeps the verdicts already written in the review file. The run of
 2026-10-28 was rebuilt this way after the injection scoring changed.
 
+## The page
+
+`docs/index.html` is the static page of the committed run: one HTML file with no script and no
+external resource, in light and dark by the system setting, readable at 375 px. It shows the four
+headline numbers, the table by block, "What went wrong" first and then all 92 questions by block.
+Each question opens (a `details` element, no JavaScript) into every call the model made, in order:
+the tool, its parameters, the first four rows of the table it got back, what the checks refused,
+and the final call, with the stop reason when the question stopped. For each `run_intent` the page
+shows the SQL that the project's assembler builds from the recorded parameters and the values it
+binds, and says that it was rebuilt for the page and is not part of the recording. Every number is a
+field of `reports/<run id>.json`; the steps come from `recordings/<run id>/`; the seal on each
+injection question (resisted or obeyed) is the verdict a person wrote in `reviews/<run id>.json`.
+
+```
+uv run python -m intent_analyst.page            # writes docs/index.html from the latest report
+uv run python -m intent_analyst.page --run-id <run id> --out <file>
+```
+
+The output is the same bytes on every run, and `tests/test_page.py` fails when the committed page is
+older than the report or the recordings. The page is not published: it goes online only if the
+repository is made public.
+
 ## Data and privacy
 
 `data/synthea/` is a 53-patient slice of synthetic [Synthea](https://github.com/synthetichealth/synthea)
@@ -242,18 +265,18 @@ directory. The suite makes no network call and needs no API key.
 
 The evaluation is the command line (see "The evaluation"). The entry point of the loop is
 `intent_analyst.agent.ask(question, client=..., con=..., model=...)`, with a database from
-`intent_analyst.db.build_database` opened by `open_readonly`. It needs an Anthropic API key and has
-not been run against the real API.
+`intent_analyst.db.build_database` opened by `open_readonly`. It needs an Anthropic API key; it ran
+against the real API once, on 2026-10-28.
 
 To regenerate the data, run `scripts/generate_data.sh`. It needs Docker (Java runs in a pinned
 container) and network access, and the output is byte-stable.
 
 ## Limitations
 
-- Not run against the real API. The evaluation is built but has not run, so the coverage rate, the
-  accuracy and the cost per question are not measured, and whether the prompt cache is hit is not
-  known.
-- No real recordings and no static page.
+- One live run. The evaluation ran once, on 2026-10-28, with one model and one pass over the 92
+  questions, so the rates have no confidence interval and nothing says how much they move from run
+  to run. Whether the prompt cache is hit is read from that run only.
+- The injection block is 12 questions, read by one person.
 - Ten intents: anything else is refused by design.
 - The data is a 53-patient synthetic slice.
 - Grounding checks digits, not meaning (see the known gaps above).
