@@ -14,8 +14,10 @@ from intent_analyst.page import (
     CSS,
     DARK,
     LIGHT,
+    _natural,
     build_page,
     esc,
+    highlight,
     load_steps,
     main,
 )
@@ -44,6 +46,19 @@ class RunFiles:
         data = json.loads(self.report.read_text(encoding="utf-8"))
         change(data)
         self.report.write_text(json.dumps(data), encoding="utf-8")
+
+    def edit_calls(self, question_id: str, name: str, change: Any) -> None:
+        """Change every recorded call to the tool `name`."""
+
+        def walk(data: dict[str, Any]) -> None:
+            for i in range(len(data["interactions"])):
+                body = _response(data, i)
+                for block in body["content"]:
+                    if block.get("type") == "tool_use" and block["name"] == name:
+                        change(block)
+                _set_response(data, i, body)
+
+        self.edit_recording(question_id, walk)
 
     def edit_recording(self, question_id: str, change: Any) -> None:
         path = self.recordings / f"{question_id}.json"
@@ -444,3 +459,174 @@ def test_the_page_module_does_not_touch_the_network() -> None:
     source = Path(page.__file__).read_text(encoding="utf-8")
     for name in ("import anthropic", "import httpx", "import socket", "urllib", "import requests"):
         assert name not in source
+
+
+# ---------- G8 again: every escape has a test that fails without it ----------
+
+HOSTILE = "<script>alert(1)</script>"
+HOSTILE_IMG = '"><img src=x onerror=alert(2)>'
+
+
+def test_the_head_and_tail_of_a_marked_answer_are_escaped(files: RunFiles) -> None:
+    text = f"{HOSTILE} HACKED-2290 {HOSTILE_IMG}"
+
+    def change(data: dict[str, Any]) -> None:
+        last = len(data["interactions"]) - 1
+        body = _response(data, last)
+        for block in body["content"]:
+            if block.get("type") == "tool_use" and "text" in block["input"]:
+                block["input"]["text"] = text
+        _set_response(data, last, body)
+
+    files.edit_recording("injection-12", change)
+    html = files.build()
+    assert "<script" not in html and "<img" not in html
+    assert (
+        "&lt;script&gt;alert(1)&lt;/script&gt; <mark>HACKED-2290</mark> "
+        "&quot;&gt;&lt;img src=x onerror=alert(2)&gt;"
+    ) in html
+
+
+def test_the_marked_text_is_escaped() -> None:
+    assert highlight("a <b>X</b> c", ["<b>x</b>"]) == "a <mark>&lt;b&gt;X&lt;/b&gt;</mark> c"
+
+
+def test_the_tool_name_is_escaped(files: RunFiles) -> None:
+    def rename(block: dict[str, Any]) -> None:
+        block["name"] = HOSTILE
+
+    files.edit_calls("count_patients-01", "run_intent", rename)
+    html = files.build()
+    assert "<script" not in html
+    assert f"<h4>{esc(HOSTILE)} " in html
+
+
+def test_the_flag_location_is_escaped(files: RunFiles) -> None:
+    def change(data: dict[str, Any]) -> None:
+        for q in data["questions"]:
+            if q["id"] == "injection-12":
+                q["flags"][0]["where"] = HOSTILE
+
+    files.edit_report(change)
+    html = files.build()
+    assert "<script" not in html
+    assert f"the forbidden text appears in {esc(HOSTILE)}." in html
+
+
+def test_the_result_id_is_escaped(files: RunFiles) -> None:
+    def change(data: dict[str, Any]) -> None:
+        for exchange in data["interactions"]:
+            request = json.loads(exchange["request"]["body"])
+            for message in request["messages"]:
+                content = message["content"]
+                for block in content if isinstance(content, list) else []:
+                    if block.get("type") == "tool_result" and "result_id" in block["content"]:
+                        table = json.loads(block["content"])
+                        table["result_id"] = HOSTILE
+                        block["content"] = json.dumps(table)
+            exchange["request"]["body"] = json.dumps(request)
+
+    files.edit_recording("count_patients-01", change)
+    html = files.build()
+    assert "<script" not in html
+    assert f"result {esc(HOSTILE)}</div>" in html
+
+
+def test_the_bound_values_line_is_escaped(files: RunFiles) -> None:
+    def change(block: dict[str, Any]) -> None:
+        block["input"]["params"]["reason"] = HOSTILE_IMG
+
+    files.edit_calls("medications_for_condition-03", "run_intent", change)
+    html = files.build()
+    assert "<img" not in html
+    assert f"$reason = {esc(HOSTILE_IMG)}</div>" in html
+
+
+# ---------- values, flags, refused parameters, labels, order ----------
+
+
+def test_a_parameter_bound_to_none_is_shown_as_null(html: str) -> None:
+    assert "= None" not in html
+    assert "$name_contains = NULL" in html
+
+
+def test_flags_of_the_same_kind_are_one_phrase(html: str) -> None:
+    assert (
+        "the forbidden text appears in tool call answer (step 3) and tool call answer (step 4)."
+        in html
+    )
+    assert "(step 3); the forbidden text" not in html
+
+
+def test_three_places_and_two_kinds_are_grouped(files: RunFiles) -> None:
+    def change(data: dict[str, Any]) -> None:
+        for q in data["questions"]:
+            if q["id"] == "injection-03":
+                flag = q["flags"][0]
+                q["flags"] = [
+                    {**flag, "where": "A"},
+                    {**flag, "kind": "protected_text", "where": "P"},
+                    {**flag, "where": "B"},
+                    {**flag, "where": "C"},
+                ]
+
+    files.edit_report(change)
+    assert (
+        "the forbidden text appears in A, B and C; the system prompt appears in P." in files.build()
+    )
+
+
+def test_a_call_the_catalog_refuses_shows_a_note_and_no_sql(files: RunFiles) -> None:
+    def change(block: dict[str, Any]) -> None:
+        block["input"]["intent"] = "no_such_intent"
+
+    files.edit_calls("count_patients-01", "run_intent", change)
+    html = files.build()
+    start = html.index("no_such_intent")
+    step = html[start : html.index('<div class="st', start)]
+    assert "the catalog refuses these parameters, so no SQL is built" in step
+    assert "<pre>" not in step
+
+
+def test_the_header_counts_replies_and_says_so(html: str) -> None:
+    counts = re.findall(r'<span class="m">(\d+) (\w+) · \$', html)
+    assert counts and {word for _, word in counts} == {"reply", "replies"}
+    assert all((word == "reply") == (n == "1") for n, word in counts)
+    assert " steps · $" not in html and " step · $" not in html
+    assert '<span class="m">1 reply · $' in html
+    assert '<span class="m">3 replies · $' in html
+
+
+def test_the_label_follows_the_report_count(files: RunFiles) -> None:
+    def change(data: dict[str, Any]) -> None:
+        data["questions"][0]["steps"] = 7
+
+    files.edit_report(change)
+    assert '<span class="m">7 replies · $' in files.build()
+
+
+def test_the_highlight_ignores_letter_case() -> None:
+    assert (
+        highlight("Said hacked-2290 and HACKED-2290", ["HACKED-2290"])
+        == "Said <mark>hacked-2290</mark> and <mark>HACKED-2290</mark>"
+    )
+
+
+def test_ids_sort_by_their_number_not_their_letters() -> None:
+    ids = ["a-10", "a-2", "b-1", "a-1"]
+    assert sorted(ids, key=_natural) == ["a-1", "a-2", "a-10", "b-1"]
+
+
+def test_a_block_lists_its_questions_in_number_order(files: RunFiles) -> None:
+    shutil.copy(
+        files.recordings / "count_patients-01.json", files.recordings / "count_patients-100.json"
+    )
+
+    def change(data: dict[str, Any]) -> None:
+        for q in data["questions"]:
+            if q["id"] == "count_patients-01":
+                q["id"] = "count_patients-100"
+
+    files.edit_report(change)
+    shown = re.findall(r'<span class="id">(count_patients-\d+)</span>', files.build())
+    assert shown == [f"count_patients-{n}" for n in ("02", "03", "04", "05", "06", "100")]

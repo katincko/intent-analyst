@@ -233,8 +233,8 @@ inside `BEGIN`.
 
 ## Lot 7
 
-The live evaluation is assembled and never run here: every proof below is against the in-memory
-fake. Same method: bug planted, red copied, restored, green again.
+One live run exists (`20261028T133353Z-claude-haiku-5-5`, report committed). The proofs below are
+against the in-memory fake. Same method: bug planted, red copied, restored, green again.
 
 ### V1 price table (`tests/test_pricing.py`)
 
@@ -318,8 +318,8 @@ about the model.
 One JSON file and one Markdown table per run, named by run id (`reports/<date>T<time>Z-<model>`):
 model, date, price table version and the date its prices were read, hashes of the question file and
 of the system prompt, correct rate and coverage by block, cost, time and cache tokens read per
-question, total cost (reported by the API, and as counted against the cap). Nothing has been
-written to `reports/` yet, because the live evaluation has not run.
+question, total cost (reported by the API, and as counted against the cap). The one live run
+wrote `reports/20261028T133353Z-claude-haiku-5-5.json`, and it is committed.
 
 | # | Planted bug | Red result and reason | Green after restore |
 |---|---|---|---|
@@ -477,6 +477,20 @@ build, so every change to the generator shows red there as well (counted in each
 | S9 | dashes in model text not turned into character references | 2 failed: the escape test; the committed page is stale | yes |
 | S10 | a verdict that the report and the review file do not share accepted | 1 failed: the mismatch is no longer refused | yes |
 | S11 | `correct_rate` of the committed report changed to 0.5 | 2 failed: the top numbers of `docs/index.html` and the stale check | yes |
+| S12 | head of a marked answer written without escaping | 2 failed: `test_the_head_and_tail_of_a_marked_answer_are_escaped` (a `<script>` before the forbidden text reaches the page), and the stale check | yes |
+| S13 | tail of a marked answer written without escaping | 2 failed: the same test (an `<img onerror>` after the forbidden text), and the stale check | yes |
+| S14 | text inside `<mark>` written without escaping | 1 failed: `test_the_marked_text_is_escaped` | yes |
+| S15 | tool name written without escaping | 1 failed: `test_the_tool_name_is_escaped` | yes |
+| S16 | flag location written without escaping | 1 failed: `test_the_flag_location_is_escaped` | yes |
+| S17 | `result_id` written without escaping | 1 failed: `test_the_result_id_is_escaped` | yes |
+| S18 | bound values line written without escaping | 1 failed: `test_the_bound_values_line_is_escaped` | yes |
+| S19 | a value bound to None shown as `None` | 2 failed: `test_a_parameter_bound_to_none_is_shown_as_null` (generated page), and the stale check | yes |
+| S20 | one phrase per flag again | 3 failed: `test_flags_of_the_same_kind_are_one_phrase`, `test_three_places_and_two_kinds_are_grouped`, and the stale check | yes |
+| S21 | places joined with "or" instead of "and" | 3 failed: the same two tests, and the stale check | yes |
+| S22 | no note when the catalog refuses the parameters | 1 failed: `test_a_call_the_catalog_refuses_shows_a_note_and_no_sql` | yes |
+| S23 | header label back to "steps" | 3 failed: `test_the_header_counts_replies_and_says_so` (generated page), `test_the_label_follows_the_report_count`, and the stale check | yes |
+| S24 | highlight made case sensitive | 2 failed: `test_the_highlight_ignores_letter_case` and `test_the_marked_text_is_escaped` | yes |
+| S25 | question number compared as text, not as a number | 1 failed: `test_ids_sort_by_their_number_not_their_letters` | yes |
 
 The four the spec names (G10): a `<script>` from the model escaped is S1; a top number changed in
 the report is S2 (a generator that ignores the report) and S11 (the report changed under the

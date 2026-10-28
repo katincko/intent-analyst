@@ -44,7 +44,11 @@ TABLE_ROWS = 4  # rows of a returned table shown on the page
 SQL_LEGEND = (
     "SQL the catalog builds from these parameters "
     "(rebuilt for this page, not part of the recording)"
-)  # ---------- recordings ----------
+)
+NO_SQL_NOTE = "the catalog refuses these parameters, so no SQL is built"
+
+
+# ---------- recordings ----------
 
 
 @dataclass(frozen=True)
@@ -408,14 +412,19 @@ def table_html(result: str) -> str:
     )
 
 
+def _sql_value(value: object) -> str:
+    """A bound value as the database receives it: None is NULL."""
+    return "NULL" if value is None else str(value)
+
+
 def sql_html(step: Step) -> str:
     """The SQL the assembler builds from the recorded parameters, and the values it binds."""
     params = step.input.get("params")
     try:
         query = assemble(str(step.input.get("intent")), params if isinstance(params, dict) else {})
     except (KeyError, ValueError, TypeError):
-        return ""  # parameters the catalog refuses build no query
-    bound = ", ".join(f"${k} = {v}" for k, v in sorted(query.params.items()))
+        return f'<div class="cap">{esc(NO_SQL_NOTE)}</div>'
+    bound = ", ".join(f"${k} = {_sql_value(v)}" for k, v in sorted(query.params.items()))
     return f'<div class="cap">{esc(SQL_LEGEND)}</div><pre>{esc(query.sql)}</pre>' + (
         f'<div class="cap">bound: {esc(bound)}</div>' if bound else ""
     )
@@ -429,6 +438,11 @@ def _why(result: str) -> str:
     return "refused: the tool returned an error"
 
 
+def _joined(items: list[str]) -> str:
+    """'a', 'a and b', 'a, b and c'."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def flags_html(q: QuestionRecord) -> str:
     if q.block != "injection" or not q.flags:
         return ""
@@ -437,7 +451,10 @@ def flags_html(q: QuestionRecord) -> str:
         "protected_text": "the system prompt appears in",
         "forbidden_call": "a call that does what the injection asks:",
     }
-    parts = "; ".join(f"{said[f.kind]} {esc(f.where)}" for f in q.flags)
+    places: dict[str, list[str]] = {}
+    for f in q.flags:
+        places.setdefault(f.kind, []).append(esc(f.where))
+    parts = "; ".join(f"{said[kind]} {_joined(where)}" for kind, where in places.items())
     verdict = q.human_verdict
     read = f"A person read it: {esc(verdict)}." if verdict else "No person has read it yet."
     quoted = (
@@ -544,7 +561,7 @@ def loop_html(q: QuestionRecord, steps: list[Step], marks: list[str]) -> str:
 def question_html(
     q: QuestionRecord, steps: list[Step], marks: list[str], open_now: bool = False
 ) -> str:
-    noun = "step" if q.steps == 1 else "steps"
+    noun = "reply" if q.steps == 1 else "replies"
     return (
         f'<details class="q"{" open" if open_now else ""}><summary class="qh">'
         f'<span class="chev">{icon("chev", 14, "rt")}{icon("down", 14, "dn")}</span>'
