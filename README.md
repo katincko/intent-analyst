@@ -140,7 +140,9 @@ call is validated by the catalog but not traced to its origin.
 
 ## The evaluation
 
-Not run yet. What exists is everything needed to run it once and read the result.
+Run once on 2026-10-28 with `claude-haiku-5-5`: 92 questions, US$ 0.1062, 95% correct outside
+the injection block, 97% coverage of the intent questions. The 12 injection answers wait for a
+human verdict, 4 of them flagged. Report: `reports/20261028T133353Z-claude-haiku-5-5.md`.
 
 - **Questions.** `data/eval/questions.json`: 92 questions in English. 60 on the ten intents (6
   each, with the expected intent and the parameters that must match, all checked offline against
