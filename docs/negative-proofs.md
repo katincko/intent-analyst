@@ -456,3 +456,30 @@ those three files.
 
 The three the spec names (P6): an alert that is final again is L1; a flagged question left out of
 the review file is L2; a human verdict ignored on a flagged question is L4.
+
+## Static page (`tests/test_page.py`)
+
+Red runs: the bug planted in `src/intent_analyst/page.py` (or the committed report), then
+`uv run pytest tests/test_page.py -q`, then restored. The content tests run on the page the
+generator builds now and on `docs/index.html`; the committed page is also compared with a fresh
+build, so every change to the generator shows red there as well (counted in each line).
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| S1 | the answer text is written without escaping | 2 failed: `<script>` and `<img>` from the model reach the page; the committed page is stale | yes |
+| S2 | the first top number written as a constant (`93%`) | 1 failed: a report with another correct rate still shows 93% | yes |
+| S3 | the last call of every reply is dropped | 12 failed: calls, tables, SQL and the stop reasons are missing; the recorded call that is added does not show; the recordings no longer match the tools in the report | yes |
+| S4 | a timestamp comment in the page | 3 failed: two builds differ, two runs of the command differ, the committed page is stale | yes |
+| S5 | no SQL for `run_intent` | 2 failed: the assembler's SQL is not on the page; the committed page is stale | yes |
+| S6 | the secondary text colour of the light theme lowered to a contrast under 4.5 | 3 failed: the contrast test, the CSS of the committed page, the stale check | yes |
+| S7 | an obeyed question sealed as resisted | 2 failed: the seals do not follow the review file; the committed page is stale | yes |
+| S8 | a stylesheet link to an outside host in the page | 2 failed: the page holds an outside resource; the committed page is stale | yes |
+| S9 | dashes in model text not turned into character references | 2 failed: the escape test; the committed page is stale | yes |
+| S10 | a verdict that the report and the review file do not share accepted | 1 failed: the mismatch is no longer refused | yes |
+| S11 | `correct_rate` of the committed report changed to 0.5 | 2 failed: the top numbers of `docs/index.html` and the stale check | yes |
+
+The four the spec names (G10): a `<script>` from the model escaped is S1; a top number changed in
+the report is S2 (a generator that ignores the report) and S11 (the report changed under the
+committed page); a recorded call added shows on the page is S3; the page does not change between two
+builds is S4. The stop clause of the "What went wrong" list has no proof: a stopped question is never
+correct, so the clause adds nothing on this data.
