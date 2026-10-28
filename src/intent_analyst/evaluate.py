@@ -6,6 +6,10 @@
                 asks for --yes after printing the most it can cost. Every exchange with the API is
                 recorded, one file per question, under recordings/<run id>/ (no key in them)
     --replay D  runs the loop again from the recordings in directory D: no network, no key, no cost
+    --rescore R scores a past run again with the current code, from its recordings (no network,
+                no key, no cost): R is the run's report file. The run id, date, model and times
+                are kept, the report and the review file are rewritten, and verdicts already
+                written in the review file are kept
 
 The global cap (`--total-usd`, default 2.00) is never passed: see `evaluation.py`.
 """
@@ -27,6 +31,7 @@ from typing import Any, TextIO
 import anthropic
 import duckdb
 import httpx2
+from pydantic import ValidationError
 
 from intent_analyst.agent import DEFAULT_LIMITS, MAX_TOKENS, Limits, Outcome, ask
 from intent_analyst.db import build_database, open_readonly
@@ -42,7 +47,7 @@ from intent_analyst.pricing import PRICES
 from intent_analyst.questions import QUESTIONS_PATH, Question, load_questions
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
 from intent_analyst.report import build_report, write_report
-from intent_analyst.review import build_reviews, write_reviews
+from intent_analyst.review import build_reviews, load_reviews, with_verdicts, write_reviews
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_TOTAL_USD = Decimal("2.00")
@@ -126,6 +131,7 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
     p.add_argument("--record-dir", type=Path, help="where the recordings go (default: by run id)")
     p.add_argument("--replay", type=Path, metavar="DIR", help="replay the recordings in DIR")
+    p.add_argument("--rescore", type=Path, metavar="REPORT", help="score a past run again")
     p.add_argument("--report-dir", type=Path, help="where the report goes (default: reports/)")
     p.add_argument("--review-dir", type=Path, help="where the review file goes (default: reviews/)")
     p.add_argument("--dry-run", action="store_true", help="rehearse against a stand-in, no network")
@@ -159,6 +165,17 @@ def main(
     environ = os.environ if environ is None else environ
     out, err = out or sys.stdout, err or sys.stderr
     args = _parse(argv)
+    past: dict[str, Any] | None = None
+    if args.rescore is not None:
+        try:
+            past = dict(json.loads(args.rescore.read_text(encoding="utf-8")))
+            args.model = past["model"]
+            args.total_usd = Decimal(past["total_cap_usd"])
+            args.replay = args.replay or RECORDINGS / past["run_id"]
+            past["seconds"] = {q["id"]: q["seconds"] for q in past["questions"]}
+        except (OSError, KeyError, TypeError, ValueError, InvalidOperation) as error:
+            print(f"Bad report to score again: {error!r}", file=err)
+            return 2
     key = environ.get(KEY_VARIABLE)
     replaying = args.replay is not None
     if not args.dry_run and not replaying and not key:
@@ -185,7 +202,7 @@ def main(
     if not args.dry_run and not replaying and not args.yes:
         print("This will spend real money. Run again with --yes to go ahead.", file=err)
         return 2
-    run_id = f"{now():%Y%m%dT%H%M%SZ}-{args.model}"
+    run_id = past["run_id"] if past else f"{now():%Y%m%dT%H%M%SZ}-{args.model}"
     directory: Path = args.replay or args.record_dir or RECORDINGS / run_id
     with tempfile.TemporaryDirectory() as tmp:
         con = _with_database(Path(tmp))
@@ -211,6 +228,10 @@ def main(
                             model=args.model,
                             limits=limits,
                         )
+                        if past is not None:  # the time of the real run, not of the replay
+                            outcome = replace(
+                                outcome, seconds=past["seconds"].get(question.id, outcome.seconds)
+                            )
                 except SecretInRecording:
                     # The recording is already deleted. The reply may hold the key, so only what
                     # was spent is kept, and the executor stops the run after this question.
@@ -240,16 +261,24 @@ def main(
         label = f"replay of {directory}"
     else:
         label = f"real run, recordings in {directory}"
-    seconds = time.monotonic() - started
+    seconds = past["total_seconds"] if past else time.monotonic() - started
     print(f"{label}, {seconds:.1f} s", file=out)
     print("\n".join(_summary(run)), file=out)
     if not args.dry_run:  # a rehearsal has no answers worth a report
-        report = build_report(run, run_id, f"{now():%Y-%m-%d}", seconds)
+        report = build_report(run, run_id, past["date"] if past else f"{now():%Y-%m-%d}", seconds)
+        review_dir = args.review_dir or REVIEWS
+        existing = review_dir / f"{run_id}.json"
+        if past and existing.is_file():  # a person's verdicts are never thrown away
+            try:
+                report = with_verdicts(report, load_reviews(existing))
+            except (ValueError, OSError, ValidationError) as error:
+                print(f"Not rewritten, the review file does not fit: {error}", file=err)
+                return 2
         for written in write_report(report, args.report_dir or REPORTS):
             print(f"report: {written}", file=out)
         reviews = build_reviews(run, run_id, report)
         if reviews.items:
-            path = write_reviews(reviews, args.review_dir or REVIEWS)
+            path = write_reviews(reviews, review_dir)
             print(f"review file ({len(reviews.items)} to read): {path}", file=out)
     if run.interrupted:
         print("Stopped: a recording held an API key and was deleted.", file=err)

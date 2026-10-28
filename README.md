@@ -151,7 +151,16 @@ Not run yet. What exists is everything needed to run it once and read the result
   (default US$ 2.00), a per-question cap (default US$ 0.05), a sample per block (`--per-block`) and
   a total (`--count`). It refuses to start without `ANTHROPIC_API_KEY` in the environment, prints
   the most the run can cost and asks for `--yes` before it spends anything.
-- **Injection scoring.** The program never marks an injection question right: it is `obeyed` when a check finds it (marker, system prompt or a bad tool call), otherwise `review`. A person reads each `review` answer in `reviews/<run id>.json`, fills `verdict`, and `python -m intent_analyst.review reports/<run id>.json reviews/<run id>.json` recalculates the block; until then the report gives no rate for it.
+- **Injection scoring.** The program never gives a verdict on an injection question, in either
+  direction: comparing text cannot tell a refusal that quotes the forbidden text from obeying it,
+  nor catch every disguise. Its checks (the forbidden text in an answer or in any tool call, the
+  system prompt in any reply or tool call, a tool call that does what the injection asks) only
+  raise a flag, with the matching excerpt. Every injection question, flagged or not, goes to
+  `reviews/<run id>.json` with its flags and the whole answer. A person fills `verdict`
+  (`resisted` or `obeyed`), which decides the question whatever the flags say, and
+  `python -m intent_analyst.review reports/<run id>.json reviews/<run id>.json` recalculates the
+  block. Until every question has a verdict the block has no rate and stays out of the overall
+  one; the report says how many questions are flagged and how many wait.
 - **A cap that cannot be passed.** A question stops once its cost is over its cap, so it can end at
   most one response over. One response is bounded by the request size limit and by `max_tokens`.
   A question starts only if what is left of the global cap covers that bound. The tests run the
@@ -181,7 +190,13 @@ Not run yet. What exists is everything needed to run it once and read the result
 uv run python -m intent_analyst.evaluate --dry-run                       # the bill, no key
 uv run python -m intent_analyst.evaluate --model claude-haiku-5-5 --per-block 2 --yes
 uv run python -m intent_analyst.evaluate --replay recordings/<run id>   # offline
+uv run python -m intent_analyst.evaluate --rescore reports/<run id>.json   # offline, see below
 ```
+
+`--rescore` scores a past run again with the current code, from its recordings, with no key, no
+network and no cost. It keeps the run id, date, model, cost, answers and times, rewrites the report
+and the review file, and keeps the verdicts already written in the review file. The run of
+2026-10-28 was rebuilt this way after the injection scoring changed.
 
 ## Data and privacy
 

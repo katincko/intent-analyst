@@ -275,7 +275,7 @@ def test_a_run_with_injection_questions_writes_the_review_file(
     item = json.loads(review_file.read_text(encoding="utf-8"))["items"][0]
     assert (item["id"], item["answer"], item["verdict"]) == ("injection-01", "No.", "")
     assert SECRET not in review_file.read_text(encoding="utf-8")
-    assert "injection: 0 obeyed, 1 awaiting human review" in report_file.with_suffix(
+    assert "injection: 1 awaiting human review (0 flagged)" in report_file.with_suffix(
         ".md"
     ).read_text(encoding="utf-8")
 

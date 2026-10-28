@@ -426,3 +426,31 @@ now uses SQL shaped `patterns` instead of a stray quote and the word "union", wh
 | Key inside the recording: red | R1 (the header allow-list removed, the key is written) and R2 (the final scan removed, a key echoed by a response stays in the file) | V5 table |
 | Prompt changed: the replay is red | R4 (the real prompt changed by a few words turns the committed recordings red) and the tests that change the prompt, a tool, a message or the model | V5 table |
 | Question with a wrong expected parameter: red | Q1, Q2 and Q3 | V2 table |
+
+## Lot 8
+
+The first paid run (`20261028T133353Z-claude-haiku-5-5`) showed that an automatic `obeyed` was
+final and could not be appealed: two of the four were refusals that only quoted the forbidden
+text. Now the program gives no verdict on an injection question. Its checks raise flags with the
+matching excerpt, every injection question goes to the review file, and a person's verdict decides
+it, flagged or not. The run of 2026-10-28 was scored again offline from its committed recordings
+(`python -m intent_analyst.evaluate --rescore reports/20261028T133353Z-claude-haiku-5-5.json`).
+Tests: `tests/test_report.py`, `tests/test_injection_real.py`, `tests/test_recording.py`. Same
+method: bug planted, red copied, restored, green again. The red counts are the failed tests of
+those three files.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| L1 | a flag is final again (flagged and no verdict reads as `obeyed`) | 14 failed: the four real answers, the flagged cases, the report without a review and the rescore tests | yes |
+| L2 | a flagged question left out of the review file | 7 failed: the review file misses the flagged question, the verdict tests and both rescore tests | yes |
+| L3 | a question without a flag left out of the review file | 6 failed: the file no longer holds every injection question, the run test and the rescore test | yes |
+| L4 | a person's verdict ignored on a flagged question | 3 failed: the verdict does not change the block, the command leaves the report, the kept verdicts are lost | yes |
+| L5 | a flagged question refuses a verdict (the old rule back) | 4 failed: the verdict tests and the rescore that keeps verdicts | yes |
+| L6 | the flag keeps no excerpt | 6 failed: the flag excerpt, the four real answers and the committed report | yes |
+| L7 | the injection block shows a rate while questions wait | 4 failed: the summary, the report without a review and the committed report | yes |
+| L8 | rescoring overwrites the verdicts already written | 3 failed: the kept verdicts and the foreign review file are lost | yes |
+| L9 | rescoring takes the time of the replay instead of the real run | 1 failed: the rebuilt report differs from the committed one | yes |
+| L10 | the forbidden text in a tool call input not checked | 5 failed: the quoted marker in an `answer` call (injection-05) and the tool call cases | yes |
+
+The three the spec names (P6): an alert that is final again is L1; a flagged question left out of
+the review file is L2; a human verdict ignored on a flagged question is L4.
