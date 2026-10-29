@@ -491,6 +491,46 @@ build, so every change to the generator shows red there as well (counted in each
 | S23 | header label back to "steps" | 3 failed: `test_the_header_counts_replies_and_says_so` (generated page), `test_the_label_follows_the_report_count`, and the stale check | yes |
 | S24 | highlight made case sensitive | 2 failed: `test_the_highlight_ignores_letter_case` and `test_the_marked_text_is_escaped` | yes |
 | S25 | question number compared as text, not as a number | 1 failed: `test_ids_sort_by_their_number_not_their_letters` | yes |
+| S26 | chip label written without escaping (`page.py:344`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S27 | whole text when nothing is marked written without escaping (`page.py:381`) | 2 failed: `test_text_from_the_model_is_escaped` and the stale check | yes |
+| S28 | text before a mark written without escaping (`page.py:386`) | 2 failed: `test_the_head_and_tail_of_a_marked_answer_are_escaped` and the stale check | yes |
+| S29 | text inside a mark written without escaping (`page.py:387`) | 1 failed: `test_the_marked_text_is_escaped` | yes |
+| S30 | text after the last mark written without escaping (`page.py:389`) | 2 failed: `test_the_head_and_tail_of_a_marked_answer_are_escaped` and the stale check | yes |
+| S31 | table column name written without escaping (`page.py:401`) | 2 failed: `test_text_in_a_tool_result_and_in_the_parameters_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S32 | table cell written without escaping (`page.py:403`) | 2 failed: `test_text_in_a_tool_result_and_in_the_parameters_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S33 | result id written without escaping (`page.py:411`) | 2 failed: `test_the_result_id_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S34 | SQL text written without escaping (`page.py:428`) | 2 failed: `test_every_run_intent_shows_the_sql_the_assembler_builds_and_the_legend[generated]` and the stale check | yes |
+| S35 | bound values line written without escaping (`page.py:429`) | 1 failed: `test_the_bound_values_line_is_escaped` | yes |
+| S36 | flag location written without escaping (`page.py:456`) | 2 failed: `test_the_flag_location_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S37 | human verdict written without escaping (`page.py:459`) | 1 failed: `test_a_verdict_outside_the_two_allowed_is_escaped` | yes |
+| S38 | tool name written without escaping (`page.py:484`) | 2 failed: `test_the_tool_name_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S39 | text of a reply without a tool call written without escaping (`page.py:486`) | 2 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` and the stale check | yes |
+| S40 | stop message after a call with no result written without escaping (`page.py:511`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S41 | error result of an answer or refusal written without escaping (`page.py:531`) | 2 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` and the stale check | yes |
+| S42 | tool input written without escaping (`page.py:540`) | 4 failed: `test_text_in_a_tool_result_and_in_the_parameters_is_escaped`, `test_the_bound_values_line_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` and the stale check | yes |
+| S43 | error result of a lookup or query written without escaping (`page.py:549`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S44 | stop message with no step to hang it on written without escaping (`page.py:556`) | 1 failed: `test_the_stop_message_of_a_question_without_a_last_step_is_escaped` | yes |
+| S45 | question text written without escaping (`page.py:568`) | 3 failed: `test_text_from_the_model_is_escaped`, `test_no_text_from_the_run_files_reaches_the_page_unescaped` and the stale check | yes |
+| S46 | question id written without escaping (`page.py:568`) | 1 failed: `test_the_question_id_is_escaped` | yes |
+| S47 | model name written without escaping (`page.py:579`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S48 | run date written without escaping (`page.py:579`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S49 | block name in the table written without escaping (`page.py:609`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S50 | block name in the heading written without escaping (`page.py:660`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S51 | run id in the footer written without escaping (`page.py:671`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S52 | run id in the review path written without escaping (`page.py:672`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+| S53 | run id in the recordings path written without escaping (`page.py:672`) | 1 failed: `test_no_text_from_the_run_files_reaches_the_page_unescaped` | yes |
+
+Every `esc()` call in `page.py` on a value from the report, the review file or the recordings is
+planted one at a time (S26 to S53; two calls on one line are two rows). Most rows are killed by
+`test_no_text_from_the_run_files_reaches_the_page_unescaped`, which builds one copy of the run files
+where each text field holds its own hostile tag and checks that no tag reaches the page raw and that
+each one shows escaped. Lines 381, 386 and 389 are also red on the stale check because the built page changes,
+since a dash or a quote is written differently. These calls are on fixed text, so removing `esc()` changes nothing and no
+test can or should go red: `page.py:426` (`NO_SQL_NOTE`), `:428` (`SQL_LEGEND`), `:529` and `:544`
+(`_why`, which returns one of three fixed phrases), `:602` (the top numbers come from `pct`, `usd`
+and counts, the labels are fixed text). The definition of `esc` at `:116` is not a call. Each plant
+was restored and `page.py` was compared with its original (`0735ceca...`, sha256 of the full file
+`0735ceca07ea39374aa8c128cc2e7ddf97aa2da142081ce92349ab60ac6fe8ff`) after the last run.
 
 The four the spec names (G10): a `<script>` from the model escaped is S1; a top number changed in
 the report is S2 (a generator that ignores the report) and S11 (the report changed under the

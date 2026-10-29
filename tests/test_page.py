@@ -21,6 +21,7 @@ from intent_analyst.page import (
     load_steps,
     main,
 )
+from intent_analyst.report import QuestionRecord
 from intent_analyst.review import load_reviews
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -630,3 +631,135 @@ def test_a_block_lists_its_questions_in_number_order(files: RunFiles) -> None:
     files.edit_report(change)
     shown = re.findall(r'<span class="id">(count_patients-\d+)</span>', files.build())
     assert shown == [f"count_patients-{n}" for n in ("02", "03", "04", "05", "06", "100")]
+
+
+# ---------- G8 once more: one run where every text field is hostile ----------
+
+# Each field gets its own tag. The built page must hold none of them raw and every one of them
+# escaped, so removing one esc() on a value from the files shows up as that field's tag.
+FIELDS = [
+    "model",
+    "date",
+    "run",
+    "block",
+    "question",
+    "flagwhere",
+    "stopmsg",
+    "stopreason",
+    "toolname",
+    "toolinput",
+    "errresult",
+    "column",
+    "cell",
+    "resultid",
+    "textreply",
+]
+
+
+def _tag(field: str) -> str:
+    return f"<x-{field}>"
+
+
+def _taint_recording(files: RunFiles, question_id: str) -> None:
+    """Hostile tool name and input, error results, table columns, cells and result id."""
+
+    def walk(data: dict[str, Any]) -> None:
+        names: dict[str, str] = {}
+        for i in range(len(data["interactions"])):
+            body = _response(data, i)
+            for block in body["content"]:
+                if block.get("type") == "tool_use":
+                    names[block["id"]] = block["name"]
+                    if block["name"] == "search_values":
+                        block["name"] = _tag("toolname")
+                        block["input"] = {"text": _tag("toolinput")}
+            _set_response(data, i, body)
+        for exchange in data["interactions"]:
+            request = json.loads(exchange["request"]["body"])
+            for message in request["messages"]:
+                content = message["content"]
+                for block in content if isinstance(content, list) else []:
+                    if block.get("type") != "tool_result":
+                        continue
+                    name = names.get(block["tool_use_id"], "")
+                    if block.get("is_error") or name == "search_values":
+                        block["is_error"] = True
+                        block["content"] = _tag("errresult")
+                    elif name == "run_intent":
+                        block["content"] = json.dumps(
+                            {
+                                "result_id": _tag("resultid"),
+                                "columns": [_tag("column")],
+                                "rows": [[_tag("cell")]],
+                            }
+                        )
+            exchange["request"]["body"] = json.dumps(request)
+
+    files.edit_recording(question_id, walk)
+
+
+def _hostile_run(files: RunFiles) -> str:
+    def report(data: dict[str, Any]) -> None:
+        data["model"], data["date"], data["run_id"] = _tag("model"), _tag("date"), _tag("run")
+        for b in data["blocks"]:
+            if b["block"] == "count_patients":
+                b["block"] = _tag("block")
+        for q in data["questions"]:
+            q["question"] = _tag("question")
+            if q["block"] == "count_patients":
+                q["block"] = _tag("block")
+            if q["status"] == "stopped":
+                q["message"], q["stop_reason"] = _tag("stopmsg"), _tag("stopreason")
+            for flag in q["flags"]:
+                flag["where"] = _tag("flagwhere")
+
+    files.edit_report(report)
+    review = json.loads(files.review.read_text(encoding="utf-8"))
+    review["run_id"] = _tag("run")
+    files.review.write_text(json.dumps(review), encoding="utf-8")
+    for q in _report()["questions"]:
+        if q["status"] == "stopped" or q["block"] in {"count_patients", "injection"}:
+            _taint_recording(files, q["id"])
+    reply = {"type": "text", "text": _tag("textreply")}
+    files.edit_recording(
+        "patient_encounters-02",
+        lambda data: _set_response(data, 0, {**_response(data, 0), "content": [reply]}),
+    )
+    return files.build()
+
+
+def test_no_text_from_the_run_files_reaches_the_page_unescaped(files: RunFiles) -> None:
+    page_html = _hostile_run(files)
+    assert "<x-" not in page_html
+    for field in FIELDS:
+        assert f"&lt;x-{field}&gt;" in page_html, field
+
+
+def _record(**change: Any) -> QuestionRecord:
+    """A real record with fields set by hand, which skips the validation a file would get."""
+    first = QuestionRecord.model_validate(next(q for q in _report()["questions"] if q["flags"]))
+    return first.model_copy(update=change)
+
+
+def test_a_verdict_outside_the_two_allowed_is_escaped() -> None:
+    # The review file only allows two verdicts, so a hostile one has to be put on the record
+    # by hand: the page still must not trust it.
+    q = _record(human_verdict=HOSTILE)
+    assert HOSTILE not in page.flags_html(q)
+    assert esc(HOSTILE) in page.flags_html(q)
+
+
+def test_the_stop_message_of_a_question_without_a_last_step_is_escaped() -> None:
+    # In the committed run both stopped questions end on a tool call, so this branch (a stop
+    # with nothing to hang the message on) is reached with a record and no steps.
+    q = _record(status="stopped", message=HOSTILE)
+    shown = page.loop_html(q, [], [])
+    assert HOSTILE not in shown
+    assert esc(HOSTILE) in shown
+
+
+def test_the_question_id_is_escaped() -> None:
+    # The id is also the name of the recording, so a hostile one is put on the record by hand.
+    shown = page.question_html(_record(id=HOSTILE), [], [])
+    assert HOSTILE not in shown
+    assert f'<span class="id">{esc(HOSTILE)}</span>' in shown
