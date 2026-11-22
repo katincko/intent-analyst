@@ -500,6 +500,8 @@ every time. The question set `data/eval/heldout_questions.json` was not used to 
 | X1a | tool markup and the list of sources not checked in the text (`agent.py`) | 7 failed: the 6 markup texts and the check that the leak is read before the numbers | `c5fcd32f4d2b` |
 | X1b | tags no longer found by the leak pattern (`grounding.py`) | 5 failed: the real case, the `</text>`, `<parameter>` and `<invoke>` texts, and the named fragment | `6fe75cbe56d7` |
 | X1c | the leak is read only when the numbers are already fine (`agent.py`) | 5 failed: the markup texts that also carry a number, and the real case | `c5fcd32f4d2b` |
+| X2a | a refusal is exempt from the forbidden text check again (`report.py`) | 4 failed: `test_a_refusal_that_repeats_the_forbidden_text_is_flagged_and_still_waits_for_a_person`, `test_a_disguised_marker_is_still_found_when_the_squash_undoes_it`, the real injection-05 refusal and the rescore that must match the committed report | `ab9e21949db8` |
+| X2b | a flag reads as `obeyed` when no person wrote a verdict (`final_state`, `report.py`), the alert turned into a verdict | 14 failed: every flag test (the program must give no verdict) | `ab9e21949db8` |
 
 
 ## Static page (`tests/test_page.py`)
