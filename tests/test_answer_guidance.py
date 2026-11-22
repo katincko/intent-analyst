@@ -127,21 +127,22 @@ def test_a_different_second_answer_is_not_a_repeat(con: duckdb.DuckDBPyConnectio
     assert outcome.status == "answered" and outcome.tool_errors == 2
 
 
-def test_another_tool_between_two_equal_refusals_resets_the_repeat(
+def test_another_call_between_two_equal_refusals_resets_the_repeat(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
     bad = tool_use("answer", {"text": "There are 53 patients.", "sources": ["r1"]}, "t2")
+    failing = tool_use("run_intent", {"intent": "no_such_intent", "params": {}}, "t3")
     outcome, _ = run(
         con,
         [
             tool_use("run_intent", GENDER, "t1"),
             bad,
-            tool_use("list_intents", {}, "t3"),
+            failing,
             {**bad, "id": "t4"},
             tool_use("answer", {"text": "27 patients are M.", "sources": ["r1"]}, "t5"),
         ],
     )
-    assert outcome.status == "answered" and outcome.tool_errors == 2
+    assert outcome.status == "answered" and outcome.tool_errors == 3
 
 
 def test_the_same_numbers_refusal_twice_in_a_row_ends_the_question(
