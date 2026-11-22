@@ -83,6 +83,36 @@ def test_a_text_cell_does_not_make_its_digits_valid_numbers() -> None:
     assert missing("There were 250 doses.", table=table) == ["250"]
 
 
+# The cell of medications_for_condition-03 (28/10 run): the model quoted it with other letter case
+# and one space where the cell has two, and the number check rejected '70' and '30'.
+HUMULIN_CELL = (
+    "insulin isophane  human 70 UNT/ML / insulin  regular  human 30 UNT/ML "
+    "Injectable Suspension [Humulin]"
+)
+HUMULIN_TABLE = [[HUMULIN_CELL, 190, 1]]
+
+
+def test_a_quote_of_a_text_cell_may_differ_in_letter_case_and_spacing() -> None:
+    quoted = (
+        "Insulin isophane human 70 UNT/ML / insulin regular human 30 UNT/ML "
+        "Injectable Suspension [Humulin]"
+    )
+    assert missing(f"{quoted}: 190 prescriptions, 1 patient.", table=HUMULIN_TABLE) == []
+
+
+def test_a_quote_with_other_spacing_still_hides_its_digits_from_another_claim() -> None:
+    text = "5 patients took Albuterol  5 MG/ML Inhalation Solution."
+    assert missing(text, table=[["albuterol 5 MG/ML Inhalation Solution", 44]]) == ["5"]
+
+
+def test_a_loose_number_next_to_a_loosely_quoted_cell_is_still_checked() -> None:
+    text = (
+        "Insulin isophane human 70 UNT/ML / insulin regular human 30 UNT/ML "
+        "Injectable Suspension [Humulin]: 70 times."
+    )
+    assert missing(text, table=[[HUMULIN_CELL, 190]]) == ["70"]
+
+
 def test_a_boolean_cell_is_not_a_number() -> None:
     assert missing("It is 1.", table=[[True]]) == ["1"]
 

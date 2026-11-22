@@ -3,12 +3,13 @@
 Rules, kept deliberately strict:
 * A number is a digit run, optionally signed, with thousands commas, a decimal part and a
   trailing percent sign. It matches a cell when the values are equal (88.7 and 88.70 match).
-* Text cells never supply numbers. When the answer quotes a text cell verbatim (a medication
-  such as "albuterol 5 MG/ML", a year bucket "2020", a date), that quote is masked before the
-  scan, so the digits inside it are not checked and cannot be borrowed by an unrelated claim.
+* Text cells never supply numbers. When the answer quotes a text cell (a medication such as
+  "albuterol 5 MG/ML", a year bucket "2020", a date; letter case and spacing may differ from the
+  cell, the words may not), that quote is masked before the scan, so the digits inside it are
+  not checked and cannot be borrowed by an unrelated claim.
 * Every digit of the answer is checked. A number glued to a letter ("99k", "99x", "1e3", "2nd",
   "v2") or to another dotted number ("1.2.3") is rejected whole, because it cannot be compared
-  with a cell. Only a verbatim quote of a text cell (masked, see above) may contain such a token.
+  with a cell. Only a quote of a text cell (masked, see above) may contain such a token.
 * Numbers typed in the question may be repeated ("the 5 most common"), because the user
   supplied them.
 * Numbers written as words ("three") are not checked. This is a known gap, listed in the README.
@@ -40,11 +41,13 @@ def numbers_in(text: str) -> list[Decimal]:
 
 
 def _mask_quoted_cells(text: str, cells: Iterable[Cell]) -> str:
-    """Blank out verbatim quotes of text cells, longest first."""
+    """Blank out quotes of text cells, longest first. A quote may differ from the cell in letter
+    case and in the amount of white space (the data has double spaces), never in a word."""
     quotes = sorted({str(c) for c in cells if not _is_number(c) and c is not None}, key=len)
     for quote in reversed(quotes):
-        if quote:
-            text = re.sub(rf"(?<![\w.]){re.escape(quote)}(?![\w])", " ", text)
+        if words := quote.split():
+            loose = r"\s+".join(re.escape(w) for w in words)
+            text = re.sub(rf"(?<![\w.]){loose}(?![\w])", " ", text, flags=re.IGNORECASE)
     return text
 
 
