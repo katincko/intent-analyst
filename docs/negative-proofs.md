@@ -492,6 +492,14 @@ every time. The question set `data/eval/heldout_questions.json` was not used to 
 | E4f | a rescore ignores the version its report says (`evaluate.py`) | 3 failed: the three rescore tests (the latest prompt is sent and no recording matches) | `cc7a30e1f6d2` |
 | E4g | the allergy rule taken out of `v2.txt` | 4 failed: `test_the_new_prompt_states_the_general_rules_by_class` and the 3 cassette tests (the cassettes hold the prompt, so a new text asks for `tests/record_cassettes.py`) | `f52ce3d45e3a` |
 | E5a | the replay stops comparing the request body (`_same_json_body`, `recording.py`) | 6 failed: `test_the_replay_goes_red_when_the_prompt_of_the_recordings_changes`, `test_the_92_recordings_do_not_replay_with_the_new_prompt` and the 4 changed-request tests of `tests/test_recording.py` | `d058daaa24ae` |
+| E3a | the same refused answer twice in a row no longer ends the question (`agent.py`) | 2 failed: `test_patient_encounters_01_gets_one_sentence_and_the_repeat_ends_the_question` (the real case) and `test_the_same_numbers_refusal_twice_in_a_row_ends_the_question` | `c5fcd32f4d2b` |
+| E3b | any failing call counts for the repeat, not only a refused answer (`agent.py`) | 1 failed: `test_only_a_refused_answer_counts_as_a_repeat_not_another_failing_call` | `c5fcd32f4d2b` |
+| E3c | the refusal of an answer without sources gives no sentence (`agent.py`) | 3 failed: the missing sources, the empty sources and the no table yet cases | `c5fcd32f4d2b` |
+| E3d | the sentence names no example id (`agent.py`) | 2 failed: the missing sources and the empty sources cases (`for example ["r1"]` absent) | `c5fcd32f4d2b` |
+| E3e | v1 gets the guided loop (`prompts.py`) | 6 failed: the loop of the paid run keeps its messages, accepts the markup as before, the v1 half of the medications_for_condition-03 case, and 3 more | `d1daec8b7f22` |
+| X1a | tool markup and the list of sources not checked in the text (`agent.py`) | 7 failed: the 6 markup texts and the check that the leak is read before the numbers | `c5fcd32f4d2b` |
+| X1b | tags no longer found by the leak pattern (`grounding.py`) | 5 failed: the real case, the `</text>`, `<parameter>` and `<invoke>` texts, and the named fragment | `6fe75cbe56d7` |
+| X1c | the leak is read only when the numbers are already fine (`agent.py`) | 5 failed: the markup texts that also carry a number, and the real case | `c5fcd32f4d2b` |
 
 
 ## Static page (`tests/test_page.py`)
