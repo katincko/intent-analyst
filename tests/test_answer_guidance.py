@@ -145,6 +145,22 @@ def test_another_call_between_two_equal_refusals_resets_the_repeat(
     assert outcome.status == "answered" and outcome.tool_errors == 3
 
 
+def test_only_a_refused_answer_counts_as_a_repeat_not_another_failing_call(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    failing = tool_use("run_intent", {"intent": "no_such_intent", "params": {}}, "t1")
+    outcome, _ = run(
+        con,
+        [
+            failing,
+            {**failing, "id": "t2"},
+            tool_use("run_intent", GENDER, "t3"),
+            tool_use("answer", {"text": "27 patients are M.", "sources": ["r1"]}, "t4"),
+        ],
+    )
+    assert outcome.status == "answered" and outcome.tool_errors == 2
+
+
 def test_the_same_numbers_refusal_twice_in_a_row_ends_the_question(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
