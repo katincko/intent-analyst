@@ -1,6 +1,7 @@
 """V2: the evaluation question set is well formed and every expected answer exists in the data."""
 
 import json
+from pathlib import Path
 from typing import Any
 
 import duckdb
@@ -9,14 +10,19 @@ import pytest
 from intent_analyst.catalog import INTENTS
 from intent_analyst.db import run_intent
 from intent_analyst.questions import (
+    HELDOUT_PATH,
     NON_INTENT_BLOCKS,
     QUESTIONS_PATH,
     Question,
+    load_heldout_questions,
     load_questions,
 )
 
 QUESTIONS = load_questions()
+HELDOUT = load_heldout_questions()
 INTENT_QUESTIONS = [q for q in QUESTIONS if q.block in INTENTS]
+# both sets are checked against the data; the main set stays exactly the 92
+CHECKED_AGAINST_DATA = INTENT_QUESTIONS + [q for q in HELDOUT if q.block in INTENTS]
 
 
 def count(block: str) -> int:
@@ -54,7 +60,7 @@ def test_the_file_is_the_one_the_loader_reads() -> None:
     assert len(json.loads(QUESTIONS_PATH.read_text(encoding="utf-8"))) == len(QUESTIONS)
 
 
-@pytest.mark.parametrize("q", INTENT_QUESTIONS, ids=lambda q: q.id)
+@pytest.mark.parametrize("q", CHECKED_AGAINST_DATA, ids=lambda q: q.id)
 def test_the_expected_params_are_valid_and_the_expected_answer_exists(
     con: duckdb.DuckDBPyConnection, q: Question
 ) -> None:
@@ -134,3 +140,36 @@ def test_injection_06_names_the_sql_shape_not_a_stray_quote() -> None:
     (call,) = next(q for q in QUESTIONS if q.id == "injection-06").expect.forbidden_calls
     assert call.contains == [] and call.patterns
     assert not any(p == "'" for p in call.contains)
+
+
+def test_the_main_set_is_exactly_the_92_and_holds_no_held_out_question() -> None:
+    assert len(QUESTIONS) == 92
+    assert not any(q.id.startswith("heldout-") for q in QUESTIONS)
+
+
+def test_the_held_out_set_has_the_20_questions_in_the_agreed_mix() -> None:
+    assert len(HELDOUT) == 20
+    assert len(json.loads(HELDOUT_PATH.read_text(encoding="utf-8"))) == 20
+    assert all(q.id.startswith("heldout-") and q.question.isascii() for q in HELDOUT)
+    assert len({q.question for q in HELDOUT}) == 20
+    assert not {q.question for q in HELDOUT} & {q.question for q in QUESTIONS}
+    assert sum(q.block == "out_of_scope" for q in HELDOUT) >= 6
+    assert sum(q.block == "injection" for q in HELDOUT) >= 6
+    with_a_number = [
+        q for q in HELDOUT if q.block == "top_medications" and any(c.isdigit() for c in q.question)
+    ]
+    assert len(with_a_number) >= 4
+    assert sum(q.block in INTENTS for q in HELDOUT) >= 8
+
+
+def test_a_held_out_file_with_an_id_outside_the_prefix_is_refused(tmp_path: Path) -> None:
+    clash = tmp_path / "clash.json"
+    raw = {
+        "id": "heldout-x",
+        "block": "out_of_scope",
+        "question": "q",
+        "expect": {"outcome": "refused"},
+    }
+    clash.write_text(json.dumps([raw, {**raw, "id": "out_of_scope-01"}]), encoding="utf-8")
+    with pytest.raises(ValueError, match="starts with"):
+        load_heldout_questions(clash)

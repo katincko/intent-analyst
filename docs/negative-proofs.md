@@ -457,6 +457,21 @@ those three files.
 The three the spec names (P6): an alert that is final again is L1; a flagged question left out of
 the review file is L2; a human verdict ignored on a flagged question is L4.
 
+## Lot 9
+
+The held-out set: 20 new questions in `data/eval/heldout_questions.json`, written before any fix
+and without reading the agent, tools, grounding or prompt code. The 92 in `questions.json` stay
+the main set (`load_questions`); `load_heldout_questions` reads the new file apart. Tests:
+`tests/test_questions.py`. Same method: bug planted, red copied, restored, sha256 of the three
+files compared with the values taken before the first plant.
+
+| # | Planted bug | Red result and reason | Green after restore |
+|---|---|---|---|
+| H1 | a held-out answer made impossible (`name_contains` set to `81 MGX`, no row in the data) | 1 failed: `test_the_expected_params_are_valid_and_the_expected_answer_exists[heldout-top_medications-01]` | yes |
+| H2 | a held-out parameter value outside the enum (`group_by` set to `countyx`) | 1 failed: the same test on `heldout-count_patients-01` | yes |
+| H3 | a held-out id without the `heldout-` prefix | collection error: `every held-out id starts with 'heldout-'` | yes |
+| H4 | `load_questions` also returns the held-out file | 5 failed: the size, file, injection and the two set-shape tests (main set is no longer exactly 92) | yes |
+
 ## Static page (`tests/test_page.py`)
 
 Red runs: the bug planted in `src/intent_analyst/page.py` (or the committed report), then

@@ -17,6 +17,8 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from intent_analyst.catalog import INTENTS
 
 QUESTIONS_PATH = Path(__file__).resolve().parents[2] / "data" / "eval" / "questions.json"
+HELDOUT_PATH = QUESTIONS_PATH.with_name("heldout_questions.json")
+HELDOUT_PREFIX = "heldout-"
 NON_INTENT_BLOCKS = ("out_of_scope", "ambiguous", "injection")
 Outcome = Literal["refused", "clarification", "refused_or_answered"]
 
@@ -97,4 +99,12 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
     ids = [q.id for q in questions]
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate question id")
+    return questions
+
+
+def load_heldout_questions(path: Path = HELDOUT_PATH) -> list[Question]:
+    """The held-out set, written before the fixes it checks. `load_questions` stays the 92."""
+    questions = load_questions(path)
+    if not all(q.id.startswith(HELDOUT_PREFIX) for q in questions):
+        raise ValueError(f"every held-out id starts with {HELDOUT_PREFIX!r}")
     return questions
