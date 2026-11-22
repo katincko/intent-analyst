@@ -17,6 +17,7 @@ import pytest
 
 from intent_analyst import evaluate
 from intent_analyst.agent import Outcome, ask
+from intent_analyst.prompts import get
 from intent_analyst.questions import load_questions
 from intent_analyst.recording import recording
 from intent_analyst.report import QuestionRecord, final_state, load_report, record_of
@@ -39,7 +40,9 @@ def replayed(con: duckdb.DuckDBPyConnection, qid: str) -> tuple[Outcome, Questio
     question = next(q for q in load_questions() if q.id == qid)
     client = anthropic.Anthropic(api_key="replay-no-key", max_retries=0)
     with recording(RECORDINGS / f"{qid}.json", "replay"):
-        outcome = ask(question.question, client=client, con=con, model="claude-haiku-5-5")
+        outcome = ask(
+            question.question, client=client, con=con, model="claude-haiku-5-5", prompt=get("v1")
+        )
     return outcome, record_of(question, outcome)
 
 

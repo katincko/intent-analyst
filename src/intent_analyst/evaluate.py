@@ -44,6 +44,7 @@ from intent_analyst.evaluation import (
     worst_response_usd,
 )
 from intent_analyst.pricing import PRICES
+from intent_analyst.prompts import LATEST_NAME, LEGACY_NAME, PROMPTS, get
 from intent_analyst.questions import QUESTIONS_PATH, Question, load_questions
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
 from intent_analyst.report import build_report, write_report
@@ -124,6 +125,13 @@ def plan_lines(
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="python -m intent_analyst.evaluate", description=__doc__)
     p.add_argument("--model", default=DEFAULT_MODEL, choices=sorted(PRICES))
+    p.add_argument(
+        "--prompt",
+        choices=sorted(PROMPTS),
+        help=f"system prompt version (default: the latest, {LATEST_NAME}; --rescore takes the "
+        "version its report says, or v1 for a report older than the versions). A replay needs "
+        "the version the recordings were made with",
+    )
     p.add_argument("--total-usd", type=Decimal, default=DEFAULT_TOTAL_USD, help="global cap")
     p.add_argument("--question-usd", type=Decimal, default=DEFAULT_LIMITS.max_usd)
     p.add_argument("--per-block", type=int, help="stratified sample: this many per block")
@@ -172,6 +180,9 @@ def main(
             args.model = past["model"]
             args.total_usd = Decimal(past["total_cap_usd"])
             args.replay = args.replay or RECORDINGS / past["run_id"]
+            # a report older than the versions was written by the first prompt
+            args.prompt = args.prompt or past.get("prompt_version", LEGACY_NAME)
+            get(args.prompt)
             past["seconds"] = {q["id"]: q["seconds"] for q in past["questions"]}
         except (OSError, KeyError, TypeError, ValueError, InvalidOperation) as error:
             print(f"Bad report to score again: {error!r}", file=err)
@@ -198,7 +209,9 @@ def main(
     except (InvalidOperation, ValueError, OSError, json.JSONDecodeError) as error:
         print(f"Bad arguments or question file: {error!r}", file=err)
         return 2
+    version = get(args.prompt)
     print("\n".join(plan_lines(args.model, limits, args.total_usd, questions)), file=out)
+    print(f"system prompt: {version.name}", file=out)
     if not args.dry_run and not replaying and not args.yes:
         print("This will spend real money. Run again with --yes to go ahead.", file=err)
         return 2
@@ -227,6 +240,7 @@ def main(
                             con=con,
                             model=args.model,
                             limits=limits,
+                            prompt=version,
                         )
                         if past is not None:  # the time of the real run, not of the replay
                             outcome = replace(
@@ -248,7 +262,12 @@ def main(
             started = time.monotonic()
             try:
                 run = run_evaluation(
-                    questions, ask_one, model=args.model, limits=limits, total_cap=args.total_usd
+                    questions,
+                    ask_one,
+                    model=args.model,
+                    limits=limits,
+                    total_cap=args.total_usd,
+                    prompt_version=version.name,
                 )
             except ReplayMismatch as error:
                 print(f"Stopped: {error}", file=err)

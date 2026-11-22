@@ -19,7 +19,7 @@ import pytest
 from cassette_scenarios import API_KEY, BASE_URL, CASSETTES, SCENARIOS
 from fake_api import FakeMessagesApi, Reply, message, tool_use
 
-from intent_analyst import agent, evaluate
+from intent_analyst import agent, evaluate, prompts
 from intent_analyst.agent import Outcome, ask
 from intent_analyst.questions import QUESTIONS_PATH
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
@@ -37,6 +37,15 @@ def keep_outputs_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     monkeypatch.setattr(evaluate, "RECORDINGS", tmp_path / "default-recordings")
     monkeypatch.setattr(evaluate, "REPORTS", tmp_path / "default-reports")
     monkeypatch.setattr(evaluate, "REVIEWS", tmp_path / "default-reviews")
+
+
+def add_to_the_latest_prompt(monkeypatch: pytest.MonkeyPatch, extra: str) -> None:
+    latest = prompts.get(None)
+    monkeypatch.setitem(
+        prompts.PROMPTS,
+        latest.name,
+        prompts.PromptVersion(latest.name, latest.text + extra, latest.guided),
+    )
 
 
 def replay_client() -> anthropic.Anthropic:
@@ -73,8 +82,7 @@ def test_the_replay_gives_back_the_recorded_usage(con: duckdb.DuckDBPyConnection
 def test_a_changed_system_prompt_finds_no_recording(
     con: duckdb.DuckDBPyConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    changed = [{**agent.SYSTEM_BLOCKS[0], "text": agent.SYSTEM_PROMPT + "One more rule.\n"}]
-    monkeypatch.setattr(agent, "SYSTEM_BLOCKS", changed)
+    add_to_the_latest_prompt(monkeypatch, "One more rule.\n")
     with pytest.raises(ReplayMismatch, match="not the recorded one"):
         replay(con, "count-by-gender")
 
@@ -320,8 +328,7 @@ def test_a_replay_after_a_prompt_change_stops_with_the_reason(
     run_cli(
         ["--yes", "--count", "2", "--record-dir", str(tmp_path)], {evaluate.KEY_VARIABLE: SECRET}
     )
-    changed = [{**agent.SYSTEM_BLOCKS[0], "text": agent.SYSTEM_PROMPT + "Extra.\n"}]
-    monkeypatch.setattr(agent, "SYSTEM_BLOCKS", changed)
+    add_to_the_latest_prompt(monkeypatch, "Extra.\n")
     code, _, err = run_cli(["--replay", str(tmp_path)], {})
     assert code == 1
     assert "not the recorded one" in err

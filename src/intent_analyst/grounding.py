@@ -40,14 +40,17 @@ def numbers_in(text: str) -> list[Decimal]:
     return [d for t in _NUMBER.findall(text) if (d := _decimal(t)) is not None]
 
 
-def _mask_quoted_cells(text: str, cells: Iterable[Cell]) -> str:
-    """Blank out quotes of text cells, longest first. A quote may differ from the cell in letter
-    case and in the amount of white space (the data has double spaces), never in a word."""
+def _mask_quoted_cells(text: str, cells: Iterable[Cell], loose: bool) -> str:
+    """Blank out quotes of text cells, longest first. A loose quote may differ from the cell in
+    letter case and in the amount of white space (the data has double spaces), never in a word.
+    `loose=False` is the exact match of the run of 2026-10-28, kept so that its recordings replay
+    (ponytail: drop it when the prompt v1 recordings are retired, see prompts.py)."""
     quotes = sorted({str(c) for c in cells if not _is_number(c) and c is not None}, key=len)
     for quote in reversed(quotes):
         if words := quote.split():
-            loose = r"\s+".join(re.escape(w) for w in words)
-            text = re.sub(rf"(?<![\w.]){loose}(?![\w])", " ", text, flags=re.IGNORECASE)
+            pattern = r"\s+".join(re.escape(w) for w in words) if loose else re.escape(quote)
+            flags = re.IGNORECASE if loose else 0
+            text = re.sub(rf"(?<![\w.]){pattern}(?![\w])", " ", text, flags=flags)
     return text
 
 
@@ -56,14 +59,17 @@ def _is_number(cell: Cell) -> bool:
 
 
 def ungrounded_numbers(
-    text: str, tables: Sequence[Sequence[Sequence[Cell]]], question: str
+    text: str,
+    tables: Sequence[Sequence[Sequence[Cell]]],
+    question: str,
+    loose_quotes: bool = True,
 ) -> list[str]:
     """The numbers of `text` that no cell of `tables` (rows of cells) and not the question has."""
     cells = [cell for table in tables for row in table for cell in row]
     allowed = {Decimal(str(c)) for c in cells if _is_number(c)}
     allowed.update(numbers_in(question))
     missing = []
-    for match in _TOKEN.finditer(_mask_quoted_cells(text, cells)):
+    for match in _TOKEN.finditer(_mask_quoted_cells(text, cells, loose_quotes)):
         token = match.group()
         if _NUMBER.fullmatch(token) is None:  # glued to a letter or a dot: cannot be a cell
             missing.append(token)

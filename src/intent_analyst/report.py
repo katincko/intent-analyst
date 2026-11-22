@@ -32,10 +32,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from intent_analyst.agent import SYSTEM_PROMPT, Outcome
+from intent_analyst.agent import Outcome
 from intent_analyst.catalog import INTENTS
 from intent_analyst.evaluation import Run
 from intent_analyst.pricing import PRICE_TABLE_VERSION, PRICES_READ_ON
+from intent_analyst.prompts import LEGACY_NAME
+from intent_analyst.prompts import get as prompt_version
 from intent_analyst.questions import QUESTIONS_PATH, Question
 
 MESSAGE_CHARS = 400
@@ -110,6 +112,7 @@ class Report(BaseModel):
     price_table: str
     prices_read_on: str
     questions_sha256_12: str
+    prompt_version: str = LEGACY_NAME  # the system prompt version, see prompts.py
     system_prompt_sha256_12: str
     total_cap_usd: Decimal
     question_reserve_usd: Decimal
@@ -360,7 +363,8 @@ def build_report(run: Run, run_id: str, date: str, seconds: float) -> Report:
         price_table=PRICE_TABLE_VERSION,
         prices_read_on=PRICES_READ_ON,
         questions_sha256_12=_sha(QUESTIONS_PATH.read_bytes()),
-        system_prompt_sha256_12=_sha(SYSTEM_PROMPT.encode()),
+        prompt_version=run.prompt_version,
+        system_prompt_sha256_12=_sha(prompt_version(run.prompt_version).text.encode()),
         total_cap_usd=run.total_cap,
         question_reserve_usd=run.reserve,
         questions_run=len(records),
@@ -400,7 +404,8 @@ def render_markdown(report: Report) -> str:
         f"- Date: {report.date}",
         f"- Price table: {report.price_table} (prices read on {report.prices_read_on})",
         f"- Questions: {report.questions_run} run, {report.questions_not_run} not run "
-        f"(set `{report.questions_sha256_12}`, system prompt `{report.system_prompt_sha256_12}`)",
+        f"(set `{report.questions_sha256_12}`, system prompt {report.prompt_version} "
+        f"`{report.system_prompt_sha256_12}`)",
         f"- Cost: US$ {report.total_cost_usd:.4f} reported by the API, US$ "
         f"{report.counted_spend_usd:.4f} counted against the US$ {report.total_cap_usd} cap",
         f"- Time: {report.total_seconds:.1f} s",

@@ -14,7 +14,7 @@ import httpx2
 import pytest
 from fake_api import FakeMessagesApi, Reply, error_response, message, tool_use, usage
 
-from intent_analyst.agent import Limits, Outcome, ask
+from intent_analyst.agent import DEFAULT_LIMITS, Limits, Outcome, ask
 from intent_analyst.pricing import PRICE_TABLE_VERSION, cost_usd
 
 MODEL = "claude-sonnet-5-5"
@@ -29,7 +29,7 @@ def run(
         con=con,
         model=MODEL,
         clock=api.clock,
-        **({"limits": limits} if limits else {}),
+        limits=limits or DEFAULT_LIMITS,
     )
 
 

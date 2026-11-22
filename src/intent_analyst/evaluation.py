@@ -69,6 +69,7 @@ class Run:
     model: str
     total_cap: Decimal
     reserve: Decimal
+    prompt_version: str  # the system prompt version every question of the run used
     runs: list[QuestionRun] = field(default_factory=list)
     not_run: list[Question] = field(default_factory=list)
     spent: Decimal = Decimal(0)
@@ -83,11 +84,12 @@ def run_evaluation(
     model: str,
     limits: Limits,
     total_cap: Decimal,
+    prompt_version: str,
 ) -> Run:
     """Ask the questions in order, never letting the counted spend pass `total_cap`."""
     reserve = question_reserve(model, limits)
     unreported = worst_response_usd(model, limits)
-    run = Run(model, total_cap, reserve)
+    run = Run(model, total_cap, reserve, prompt_version)
     api_errors = 0
     for i, question in enumerate(questions):
         left = total_cap - run.spent

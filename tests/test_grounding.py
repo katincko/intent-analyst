@@ -13,7 +13,9 @@ import pytest
 from fake_api import FakeMessagesApi, Reply, message, tool_use
 
 from intent_analyst.agent import MAX_TOOL_ERRORS, Outcome, ask
+from intent_analyst.db import run_intent
 from intent_analyst.grounding import numbers_in, ungrounded_numbers
+from intent_analyst.prompts import get
 
 # Rows as a tool returns them: gender, patients, percent.
 TABLE = [["M", 27, 50.9], ["F", 26, 49.1]]
@@ -235,3 +237,38 @@ def test_the_answer_carries_the_tables_the_server_ran(con: duckdb.DuckDBPyConnec
         ["M", 27],
         ["F", 26],
     ]
+
+
+def test_the_real_quote_of_medications_for_condition_03_is_answered_in_the_loop(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """The cell of the 28/10 run, quoted with other case and one space: the new prompt version
+    accepts the answer at once, the first one rejects it (the loop of that run)."""
+    params = {"name_contains": "insulin", "limit": 1}
+    (row,) = run_intent(con, "top_medications", params)
+    assert "isophane  human" in row["medication"]  # the double space of the data
+    quote = " ".join(row["medication"].split()).replace("insulin isophane", "Insulin isophane")
+    answer = tool_use(
+        "answer",
+        {
+            "text": f"{quote}: {row['prescriptions']} prescriptions, {row['patients']} patients, "
+            f"cost {row['total_cost']}.",
+            "sources": ["r1"],
+        },
+    )
+    first = Reply(
+        message([tool_use("run_intent", {"intent": "top_medications", "params": params})])
+    )
+    new = run(con, FakeMessagesApi([first, Reply(message([answer]))]))
+    assert new.status == "answered" and new.tool_errors == 0
+    old_api = FakeMessagesApi([first, Reply(message([answer])), Reply(message([answer]))])
+    old = ask(
+        "Q?",
+        client=old_api.client(),
+        con=con,
+        model="claude-sonnet-5-5",
+        clock=old_api.clock,
+        prompt=get("v1"),
+    )
+    assert (old.status, old.tool_errors) == ("stopped", 2), old.message
+    assert "Numbers not found" in str(old_api.requests[-1]["messages"][-1])

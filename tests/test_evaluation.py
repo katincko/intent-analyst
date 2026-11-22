@@ -48,6 +48,7 @@ def worst_case_run(
         model=model,
         limits=limits,
         total_cap=cap,
+        prompt_version="v2",
     )
 
 
@@ -110,7 +111,9 @@ def test_a_request_that_may_have_been_billed_is_charged_at_the_worst_case() -> N
     def timed_out(q: Question) -> Outcome:
         return Outcome("stopped", "timed out", [], "timeout", 1, Decimal(0), 1.0, 0, 0)
 
-    run = run_evaluation(QUESTIONS, timed_out, model=SONNET, limits=limits, total_cap=CAP)
+    run = run_evaluation(
+        QUESTIONS, timed_out, model=SONNET, limits=limits, total_cap=CAP, prompt_version="v2"
+    )
     assert [r.charged for r in run.runs] == [worst] * MAX_CONSECUTIVE_API_ERRORS
     assert run.notice and "in a row" in run.notice
     assert run.spent == worst * MAX_CONSECUTIVE_API_ERRORS

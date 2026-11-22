@@ -12,7 +12,8 @@ from typing import Any
 import duckdb
 from fake_api import FakeMessagesApi, Reply, message, tool_use, usage
 
-from intent_analyst.agent import SYSTEM_BLOCKS, SYSTEM_PROMPT, ask
+from intent_analyst.agent import ask
+from intent_analyst.prompts import get, system_blocks
 from intent_analyst.tools import tool_definitions
 
 MODEL = "claude-sonnet-5-5"
@@ -33,9 +34,9 @@ def requests_for(con: duckdb.DuckDBPyConnection, questions: list[str]) -> list[d
 def test_the_system_block_carries_the_one_breakpoint(con: duckdb.DuckDBPyConnection) -> None:
     (request,) = requests_for(con, ["How many patients?"])
     assert request["system"] == [
-        {"type": "text", "text": SYSTEM_PROMPT, "cache_control": BREAKPOINT}
+        {"type": "text", "text": get(None).text, "cache_control": BREAKPOINT}
     ]
-    assert request["system"] == SYSTEM_BLOCKS
+    assert request["system"] == system_blocks(get(None))
     assert "cache_control" not in json.dumps(request["tools"])
     assert "cache_control" not in json.dumps(request["messages"])
     assert "cache_control" not in request  # no top-level automatic caching
@@ -50,7 +51,7 @@ def test_the_prefix_is_the_same_bytes_for_every_question(con: duckdb.DuckDBPyCon
         return json.dumps([request["tools"], request["system"]], sort_keys=False).encode()
 
     assert prefix(first) == prefix(second) == prefix(third)
-    assert prefix(first) == json.dumps([tool_definitions(), SYSTEM_BLOCKS]).encode()
+    assert prefix(first) == json.dumps([tool_definitions(), system_blocks(get(None))]).encode()
     assert first["messages"] != second["messages"]  # only the messages differ
 
 
@@ -58,7 +59,7 @@ def test_the_prefix_is_long_enough_to_be_cached_by_a_rough_count() -> None:
     # No token count is available without a call to the API, so this is only a floor: at 6
     # characters per token (JSON and English are denser than that) the prefix is over 512 tokens.
     # The evaluation report shows the tokens really read from the cache for each question.
-    size = len(json.dumps([tool_definitions(), SYSTEM_BLOCKS]))
+    size = len(json.dumps([tool_definitions(), system_blocks(get(None))]))
     assert size / 6 > 512, size
 
 

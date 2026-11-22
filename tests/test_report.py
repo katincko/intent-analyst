@@ -115,7 +115,9 @@ def make_run(con: duckdb.DuckDBPyConnection) -> tuple[Report, list[Outcome]]:
         outcomes.append(outcome)
         return outcome
 
-    run = run_evaluation(QUESTIONS, ask_one, model=MODEL, limits=Limits(), total_cap=Decimal(2))
+    run = run_evaluation(
+        QUESTIONS, ask_one, model=MODEL, limits=Limits(), total_cap=Decimal(2), prompt_version="v2"
+    )
     return build_report(run, f"20261027T000000Z-{MODEL}", "2026-10-27", 12.5), outcomes
 
 
@@ -395,7 +397,9 @@ def run_scripts(
         api = FakeMessagesApi(list(scripts[q.id]))
         return ask(q.question, client=api.client(), con=con, model=MODEL, clock=api.clock)
 
-    run = run_evaluation(questions, ask_one, model=MODEL, limits=Limits(), total_cap=Decimal(2))
+    run = run_evaluation(
+        questions, ask_one, model=MODEL, limits=Limits(), total_cap=Decimal(2), prompt_version="v2"
+    )
     report = build_report(run, f"20261027T000000Z-{MODEL}", "2026-10-27", 1.0)
     return report, build_reviews(run, report.run_id, report)
 

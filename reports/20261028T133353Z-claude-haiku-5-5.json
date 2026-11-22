@@ -5,6 +5,7 @@
   "price_table": "2026-10-16",
   "prices_read_on": "2026-10-27",
   "questions_sha256_12": "782427343839",
+  "prompt_version": "v1",
   "system_prompt_sha256_12": "dfd45877dde0",
   "total_cap_usd": "2.00",
   "question_reserve_usd": "0.063224",
