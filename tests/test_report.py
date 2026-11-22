@@ -3,6 +3,7 @@ through the in-memory fake. The committed reports (none until the live run happe
 refer to questions that exist.
 """
 
+import hashlib
 import io
 import json
 from decimal import Decimal
@@ -15,6 +16,7 @@ from fake_api import FakeMessagesApi, Reply, message, tool_use, usage
 from intent_analyst.agent import Limits, Outcome, ask
 from intent_analyst.evaluation import run_evaluation
 from intent_analyst.pricing import PRICE_TABLE_VERSION
+from intent_analyst.prompts import get
 from intent_analyst.questions import Expect, Question, load_questions
 from intent_analyst.report import (
     InjectionFlag,
@@ -187,6 +189,11 @@ def test_the_report_has_what_the_spec_lists(con: duckdb.DuckDBPyConnection) -> N
     assert report.model == MODEL and report.date == "2026-10-27"
     assert report.price_table == PRICE_TABLE_VERSION
     assert len(report.questions_sha256_12) == 12 == len(report.system_prompt_sha256_12)
+    assert report.prompt_version == "v2"  # the version the run was made with, in both files
+    assert (
+        report.system_prompt_sha256_12 == hashlib.sha256(get("v2").text.encode()).hexdigest()[:12]
+    )
+    assert "system prompt v2 `" in render_markdown(report)
     first = report.questions[0]
     assert first.cost_usd > 0 and first.seconds == 2.0 and first.steps == 2
     assert first.tools == ["run_intent", "answer"]
