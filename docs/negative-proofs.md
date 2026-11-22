@@ -472,6 +472,17 @@ files compared with the values taken before the first plant.
 | H3 | a held-out id without the `heldout-` prefix | collection error: `every held-out id starts with 'heldout-'` | yes |
 | H4 | `load_questions` also returns the held-out file | 5 failed: the size, file, injection and the two set-shape tests (main set is no longer exactly 92) | yes |
 
+### Fixes after the first paid run (E2 to E6, X1 to X5)
+
+Each row: the bug planted in one file, the red result, the file restored with `git checkout`, and
+the sha256 of the file (first 12 characters) read before the plant and after the restore, equal
+every time. The question set `data/eval/heldout_questions.json` was not used to design any rule.
+
+| # | Planted bug | Red result and reason | sha256 before = after |
+|---|---|---|---|
+| E2a | quote of a text cell matched with letter case (`flags=re.IGNORECASE` removed, `grounding.py`) | 3 failed in `tests/test_grounding.py`: the Humulin quote (`70` and `30` reported), the quote with other spacing, the loose `70` | `2d0439e5e2a9` |
+| E2b | quote of a text cell matched with the exact spacing of the cell (`re.escape(quote)` back, `grounding.py`) | the same 3 failed | `2d0439e5e2a9` |
+
 ## Static page (`tests/test_page.py`)
 
 Red runs: the bug planted in `src/intent_analyst/page.py` (or the committed report), then
