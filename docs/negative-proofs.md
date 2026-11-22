@@ -480,8 +480,19 @@ every time. The question set `data/eval/heldout_questions.json` was not used to 
 
 | # | Planted bug | Red result and reason | sha256 before = after |
 |---|---|---|---|
-| E2a | quote of a text cell matched with letter case (`flags=re.IGNORECASE` removed, `grounding.py`) | 3 failed in `tests/test_grounding.py`: the Humulin quote (`70` and `30` reported), the quote with other spacing, the loose `70` | `2d0439e5e2a9` |
-| E2b | quote of a text cell matched with the exact spacing of the cell (`re.escape(quote)` back, `grounding.py`) | the same 3 failed | `2d0439e5e2a9` |
+| E2a | quote of a text cell matched with its letter case (`flags = 0`, `grounding.py`) | 4 failed in `tests/test_grounding.py`: the Humulin quote, the quote with other spacing, the loose `70`, and the loop case of medications_for_condition-03 | `5b2cfa4de6b8` |
+| E2b | quote of a text cell matched with the exact spacing of the cell (`re.escape(quote)`, `grounding.py`) | the same 4 failed | `5b2cfa4de6b8` |
+| E2c | the loop does not pass the loose switch on (`agent.py`) | 1 failed: the loop case (the answer with `70` and `30` is rejected again) | `2840cce2c55a` |
+| E2d | v1 gets the loose rule too (`prompts.py`) | 5 failed: the loop case (v1 must still reject) and the 3 rescore tests, because the 28/10 recording of medications_for_condition-03 no longer replays (the answer is accepted a request earlier) | `d1daec8b7f22` |
+| E4a | one byte added to `v1.txt` | 12 failed: `test_v1_is_the_prompt_of_the_paid_run_byte_for_byte`, `test_every_request_of_the_92_recordings_holds_v1_and_nothing_else`, `test_the_92_recordings_replay_offline_with_v1` and the 9 tests of `tests/test_injection_real.py` that replay the recordings | `dfd45877dde0` |
+| E4b | the default version is v1 (`LATEST_NAME`, `prompts.py`) | 6 failed: `test_the_new_version_is_the_latest_and_the_default`, `test_a_new_run_uses_the_latest_prompt_and_says_which`, `test_the_92_recordings_do_not_replay_with_the_new_prompt` and 3 cassette tests | `d1daec8b7f22` |
+| E4c | the report writes a fixed version (`prompt_version="v1"`, `report.py`) | 1 failed: `test_the_report_has_what_the_spec_lists` | `95229a3c5dbd` |
+| E4d | the prompt hash of the report taken from the latest version (`report.py`) | 1 failed: the rescore reads another hash than the committed report | `95229a3c5dbd` |
+| E4e | the loop ignores the version it is given (`agent.py`) | 11 failed: the version test, the offline replay with v1 and the replay tests of the real answers | `2840cce2c55a` |
+| E4f | a rescore ignores the version its report says (`evaluate.py`) | 3 failed: the three rescore tests (the latest prompt is sent and no recording matches) | `cc7a30e1f6d2` |
+| E4g | the allergy rule taken out of `v2.txt` | 4 failed: `test_the_new_prompt_states_the_general_rules_by_class` and the 3 cassette tests (the cassettes hold the prompt, so a new text asks for `tests/record_cassettes.py`) | `f52ce3d45e3a` |
+| E5a | the replay stops comparing the request body (`_same_json_body`, `recording.py`) | 6 failed: `test_the_replay_goes_red_when_the_prompt_of_the_recordings_changes`, `test_the_92_recordings_do_not_replay_with_the_new_prompt` and the 4 changed-request tests of `tests/test_recording.py` | `d058daaa24ae` |
+
 
 ## Static page (`tests/test_page.py`)
 
