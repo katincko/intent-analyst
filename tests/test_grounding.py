@@ -183,7 +183,8 @@ def test_an_answer_that_never_gets_grounded_ends_the_question(
 ) -> None:
     script = [Reply(message([tool_use("run_intent", GENDER, "t1")]))]
     script += [
-        Reply(message([answer("There are 53 patients.")])) for _ in range(MAX_TOOL_ERRORS + 1)
+        Reply(message([answer(f"There are {53 + n} patients.")]))
+        for n in range(MAX_TOOL_ERRORS + 1)
     ]
     api = FakeMessagesApi(script)
     outcome = run(con, api)

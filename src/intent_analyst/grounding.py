@@ -29,6 +29,23 @@ _TOKEN = re.compile(rf"(?<![\w.])-?\d+(?:,\d{{3}})*(?:\.\d+)?%?(?!\w|\.\d)|{_WOR
 Cell = Any
 
 
+# What the text of an answer must never carry (the model sometimes writes the end of the call in
+# the text field, see patient_encounters-01 of the run of 2026-10-28): a tag such as `</text>` or
+# `<parameter name="sources">`, the word `sources` before a colon or an equals sign, and a list
+# that starts with a result id (`["r2"]`, `[r1`). A bare `<` or `>` and a bracket as in a
+# medication name (`[ProAir]`) are not markup.
+_LEAK = re.compile(
+    r"</?[A-Za-z_][\w:.-]*(?:\s[^<>]*)?/?>|\bsources?\b[\"']?\s*[:=]|\[\s*[\"']?r\d+",
+    re.IGNORECASE,
+)
+
+
+def leaked_markup(text: str) -> str | None:
+    """The first fragment of `text` that is tool markup or a list of sources, or None."""
+    found = _LEAK.search(text)
+    return found.group() if found else None
+
+
 def _decimal(token: str) -> Decimal | None:
     try:
         return Decimal(token.rstrip("%").replace(",", ""))

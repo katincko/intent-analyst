@@ -33,7 +33,7 @@ from anthropic.types import MessageParam, OutputConfigParam
 from pydantic import BaseModel, ValidationError
 
 from intent_analyst.catalog import INTENTS
-from intent_analyst.grounding import ungrounded_numbers
+from intent_analyst.grounding import leaked_markup, ungrounded_numbers
 from intent_analyst.pricing import PRICE_TABLE_VERSION, PRICES, cost_usd
 from intent_analyst.prompts import PromptVersion, get, system_blocks
 from intent_analyst.search import SearchValues
@@ -66,6 +66,7 @@ StopReason = Literal[
     "protocol",
     "tool_errors",
     "api_error",
+    "repeated_answer",  # the same answer refused twice in a row (guided prompts only)
     "refusal",
     "unexpected",
     "secret_found",  # set by the evaluation, never by the loop
@@ -199,6 +200,7 @@ class _Question:
         self.intents_run = 0
         self.tables: dict[str, Table] = {}
         self.events: list[Event] = []
+        self.refused_answer: str | None = None  # the input of the answer refused last, if it was
 
     # ---- results ----
 
@@ -366,6 +368,22 @@ class _Question:
         return _tool_result(call.id, text)
 
     def _run_call(self, call: Any, solo: bool) -> tuple[dict[str, Any], Outcome | None]:
+        result, outcome = self._dispatch(call, solo)
+        if not self.prompt.guided:
+            return result, outcome
+        if call.name != "answer" or outcome is not None or not result.get("is_error"):
+            self.refused_answer = None  # only answers refused one right after the other count
+            return result, outcome
+        same = json.dumps(call.input, sort_keys=True, default=str)
+        if same == self.refused_answer:
+            return result, self._stop(
+                "repeated_answer",
+                f"Stopped: the same answer was refused twice in a row ({result['content']})",
+            )
+        self.refused_answer = same
+        return result, None
+
+    def _dispatch(self, call: Any, solo: bool) -> tuple[dict[str, Any], Outcome | None]:
         model = INPUT_MODELS.get(call.name)
         if model is None:
             return self._error(
@@ -374,7 +392,10 @@ class _Question:
         try:
             parsed = model.model_validate(call.input)
         except ValidationError as error:
-            return self._error(call, f"Invalid input: {_describe(error)}"), None
+            text = f"Invalid input: {_describe(error)}"
+            if self.prompt.guided and call.name == "answer":
+                text += self._answer_fix(call.input.get("text"), error, ".")
+            return self._error(call, text), None
         if call.name in TERMINAL_TOOLS and not solo:
             text = f"{call.name} was not run: call it alone, after the results of the other tools."
             return self._error(call, text), None
@@ -415,11 +436,33 @@ class _Question:
         self.tables[table.id] = table
         return self._ok(call, _table_json(table), table.id)
 
+    def _answer_fix(
+        self, text: object, error: ValidationError | None = None, lead: str = ""
+    ) -> str:
+        """One sentence on how to repair a refused answer (after `lead`), or nothing when the
+        refusal is not about the text or the sources."""
+        example = f"for example {json.dumps(list(self.tables)[-1:])}" if self.tables else ""
+        cite = (
+            f"Put the result_ids of the tables you used in the sources field, {example}."
+            if self.tables
+            else "Run an intent first, then cite its result_id in the sources field."
+        )
+        if isinstance(text, str) and (leaked := leaked_markup(text)):
+            return lead + (
+                f" The text must hold only the answer: remove {leaked!r} and what follows it, "
+                f"and pass the sources in the sources field{', ' + example if example else ''}."
+            )
+        if error is not None and any(e["loc"][:1] == ("sources",) for e in error.errors()):
+            return f"{lead} {cite}"
+        return ""
+
     def _answer(self, call: Any, parsed: Answer) -> tuple[dict[str, Any], Outcome | None]:
         unknown = [s for s in parsed.sources if s not in self.tables]
         if unknown:
             text = f"Unknown sources {unknown}. Known result_ids: {list(self.tables)}."
             return self._error(call, text), None
+        if self.prompt.guided and (fix := self._answer_fix(parsed.text)):
+            return self._error(call, fix.strip()), None
         cited = [self.tables[s] for s in parsed.sources]
         missing = ungrounded_numbers(
             parsed.text, [t.rows for t in cited], self.question, self.prompt.guided
