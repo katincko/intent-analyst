@@ -1,20 +1,35 @@
 # intent-analyst
 
+intent-analyst is a Claude agent that answers plain English questions about a database without ever writing SQL.
+
+The model only picks from a closed catalog of ten intents (fixed queries) and fills in their
+parameters; the code validates them, builds the SQL with bound parameters, runs it on a read-only
+DuckDB and rejects any answer whose numbers are not in a returned table. Unlike text-to-SQL tools
+such as [Vanna](https://github.com/vanna-ai/vanna), every query the system can run is known and
+reviewable in advance, and the approach is measured: 92 questions against the real API, 93%
+correct, 10 of 12 prompt injections resisted (read by a person).
+
+Who it is for: anyone building a "chat with your data" feature who prefers a fixed, reviewable set
+of queries over free SQL, at the price of refusing questions outside the catalog. The data is
+synthetic patient records ([Synthea](https://github.com/synthetichealth/synthea)); this is an
+independent reimplementation, with no employer code or data.
+
+**See it run: https://katincko.github.io/intent-analyst/** (every question of the evaluation, with
+each call the model made).
+
+```
+question:  How many patients do we have of each race?
+tools:     list_intents -> run_intent(count_patients, group_by=race) -> answer
+answer:    Patients by race: white 42, black 6, asian 4, native 1.
+cost:      US$ 0.0012, 3.5 s (claude-haiku-5-5, run of 2026-10-28)
+```
+
 [![CI](https://github.com/katincko/intent-analyst/actions/workflows/ci.yml/badge.svg)](https://github.com/katincko/intent-analyst/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Answers questions about data by choosing intents from a closed catalog, never by writing free SQL.
-Independent reimplementation, no employer code or data.
-
-**Status.** The data, the catalog, the SQL assembler, the tool-use loop, the CI gate and the
-live evaluation harness are built, and the evaluation ran once against the real API on 2026-10-28
-(`claude-haiku-5-5`, 92 questions, US$ 0.1062, 93% correct overall; see "The evaluation"). The
-recordings, the report and a human reading of the injection answers are committed, and a script
-turns them into a static page, `docs/index.html` (see "The page"). The tests still use only an
-in-memory fake of the Messages API.
-
-**The page.** Every question of the committed run, with each call the model made:
-https://katincko.github.io/intent-analyst/
+Contents: [The problem](#the-problem) · [The solution](#the-solution) ·
+[Decisions](#decisions-and-trade-offs) · [The evaluation](#the-evaluation) · [The page](#the-page) ·
+[Data and privacy](#data-and-privacy) · [How to run](#how-to-run) · [Limitations](#limitations)
 
 ## The problem
 
@@ -145,6 +160,15 @@ The tests are in `tests/test_grounding.py`.
 Known gaps: numbers written as words ("three") are not checked; a number the user typed may be
 repeated even if it does not describe the result; a patient id copied from one table into the next
 call is validated by the catalog but not traced to its origin.
+
+## Status
+
+The data, the catalog, the SQL assembler, the tool-use loop, the CI gate and the
+live evaluation harness are built, and the evaluation ran once against the real API on 2026-10-28
+(`claude-haiku-5-5`, 92 questions, US$ 0.1062, 93% correct overall; see "The evaluation"). The
+recordings, the report and a human reading of the injection answers are committed, and a script
+turns them into a static page, `docs/index.html` (see "The page"). The tests still use only an
+in-memory fake of the Messages API.
 
 ## The evaluation
 
