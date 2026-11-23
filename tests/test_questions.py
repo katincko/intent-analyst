@@ -7,8 +7,8 @@ from typing import Any
 import duckdb
 import pytest
 
-from intent_analyst.catalog import INTENTS
-from intent_analyst.db import run_intent
+from intent_analyst.catalog import INTENTS, TEXT_FILTERS
+from intent_analyst.db import items_selected, run_intent
 from intent_analyst.questions import (
     HELDOUT_PATH,
     NON_INTENT_BLOCKS,
@@ -68,6 +68,23 @@ def test_the_expected_params_are_valid_and_the_expected_answer_exists(
     assert rows, q.id
     if q.block == "condition_prevalence":
         assert sum(r["with_condition"] for r in rows) > 0, q.id
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        q
+        for q in CHECKED_AGAINST_DATA
+        if q.block in TEXT_FILTERS and "name_contains" in q.expect.params
+    ],
+    ids=lambda q: q.id,
+)
+def test_an_expected_text_filter_selects_at_least_one_item(
+    con: duckdb.DuckDBPyConnection, q: Question
+) -> None:
+    """The scorer compares filters by the items they select; two filters that select nothing
+    would be equal, so an expected filter that selects nothing would accept any wrong one."""
+    assert items_selected(con, q.block, q.expect.params["name_contains"]), q.id
 
 
 @pytest.mark.parametrize(
