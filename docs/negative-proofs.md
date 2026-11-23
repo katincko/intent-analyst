@@ -603,3 +603,16 @@ the report is S2 (a generator that ignores the report) and S11 (the report chang
 committed page); a recorded call added shows on the page is S3; the page does not change between two
 builds is S4. The stop clause of the "What went wrong" list has no proof: a stopped question is never
 correct, so the clause adds nothing on this data.
+
+### Fixes after the review of lot 9 (X1 prose, X3 empty filter)
+
+Same method. The leak pattern now needs `source(s)` to be a key (quoted, or followed by a colon or
+an equals sign and a result id or a list), so prose such as `Source: Synthea data shows 5 patients.`
+is not refused. New test: `test_an_expected_text_filter_selects_at_least_one_item`, because two
+filters that select nothing compare equal in `_same_params`.
+
+| # | Planted bug | Red result and reason | sha256 before = after |
+|---|---|---|---|
+| R1a | the old key rule back (`sources?` before any colon or equals sign, `grounding.py`) | 3 failed: the two prose texts are refused, and the named fragment is `Sources:` | `29f53ba904cd` |
+| R1b | the quoted key and the empty list no longer match (`grounding.py`) | 1 failed: `test_a_text_with_tool_markup_or_the_list_of_sources_is_not_accepted["sources": []]` | `29f53ba904cd` |
+| R3a | the expected filter of `top_conditions-03` set to `qqqq`, which selects nothing (`data/eval/questions.json`) | 2 failed: `test_an_expected_text_filter_selects_at_least_one_item[top_conditions-03]` and the existing answer-exists test | `782427343839` |

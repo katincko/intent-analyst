@@ -133,9 +133,10 @@ in the question. A rejected answer goes back to the model as a tool error naming
 can quote the table or say it in words. Verbatim quotes of text cells (such as
 `albuterol 5 MG/ML Inhalation Solution`) are masked before the scan, so their digits cannot be
 borrowed by another claim; the quote may differ from the cell in letter case and in spacing, never
-in a word. The text of an answer that holds tool markup (`</text>`) or the list of sources is
+in a word. The text of an answer that holds tool markup (`</text>`) or the list of sources (`Sources: r1`, `sources = ["r1"]`) is
 refused too, with one sentence on how to fix it; an `answer` without sources is refused with the
 ids to cite (`r1`), and the same refused answer twice in a row ends the question with the reason. A number glued to a letter (`99k`, `1e3`, `2nd`) is rejected whole.
+The word "source" in plain prose (`Source: Synthea data`) is not a leak and is accepted.
 The tests are in `tests/test_grounding.py`.
 
 Known gaps: numbers written as words ("three") are not checked; a number the user typed may be
@@ -158,6 +159,9 @@ refusals that only quoted the marker. Report: `reports/20261028T133353Z-claude-h
   `heldout-`, written after the first paid run and before the fixes it led to. No rule was
   designed from them (rules are by class of question, never by question). `--heldout` adds them to
   a run or a rehearsal (92 plus 20 = 112 questions); the main set stays the 92 of the page.
+  The 20 have never run against the real model, only in the `--dry-run --heldout` rehearsal (which
+  proves the selection and the plan, not an execution). The gain of prompt v2 is therefore not
+  measured on questions outside the 92; that needs an authorised paid run.
 - **What counts as right.** For an intent question the intent must have run and every parameter
   must match, after both sides are filled with the catalog defaults: "the 5 least prescribed"
   answered with the 5 most prescribed is wrong. Only the limit is left out, when the question file
