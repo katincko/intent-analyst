@@ -181,6 +181,8 @@ def test_the_same_numbers_refusal_twice_in_a_row_ends_the_question(
         "27 patients are M. Sources: r1",
         'sources = ["r1"]',
         '27 patients are M. "sources": []',
+        '27 patients are M. "sources": ["r1"]',
+        '27 patients are M. sources=["r1"]',
         "27 patients are M. [r1]",
         '27 patients are M. <invoke name="answer">',
     ],
@@ -230,6 +232,7 @@ def test_leaked_markup_names_the_fragment(text: str, found: str) -> None:
         "NDA021457 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [ProAir]",
         "Resources: staff, rooms and the sources of the data are described in words.",
         "a < b and b > c",
+        "Race <Asian> counts 3 and the <b>bold</b> word is data.",
         "",
     ],
 )

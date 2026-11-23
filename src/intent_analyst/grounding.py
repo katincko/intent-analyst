@@ -31,12 +31,17 @@ Cell = Any
 
 # What the text of an answer must never carry (the model sometimes writes the end of the call in
 # the text field, see patient_encounters-01 of the run of 2026-10-28): a tag such as `</text>` or
-# `<parameter name="sources">`, the word `sources` used as a key (quoted, or followed by a colon
-# or an equals sign and then a result id or a list: `Sources: r1`, `sources = ["r1"]`), and a list
-# that starts with a result id (`["r2"]`, `[r1`). A bare `<` or `>`, a bracket as in a medication
-# name (`[ProAir]`) and the word "source" in prose (`Source: Synthea data`) are not markup.
+# `<parameter name="sources">` (only the tags of a tool call, `<Asian>` is data), the word
+# `sources` used as a key (quoted, or followed by a colon or an equals sign and then a result id
+# or a list: `Sources: r1`, `sources = ["r1"]`), and a list that starts with a result id
+# (`["r2"]`, `[r1`). A bare `<` or `>`, a bracket as in a medication name (`[ProAir]`) and the
+# word "source" in prose (`Source: Synthea data`) are not markup.
+_TOOL_TAGS = (
+    r"antml:\w+|text|parameter|invoke|answer|sources|function_calls|function_results"
+    r"|tool_use|tool_result"
+)
 _LEAK = re.compile(
-    r"</?[A-Za-z_][\w:.-]*(?:\s[^<>]*)?/?>"
+    rf"</?(?:{_TOOL_TAGS})\b(?:\s[^<>]*)?/?>"
     r"|\bsources?\b(?:[\"']\s*[:=]|\s*[:=]\s*(?:[\[(\"']*\s*r\d+\b|\[\s*\]))"
     r"|\[\s*[\"']?r\d+",
     re.IGNORECASE,
