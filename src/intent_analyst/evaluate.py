@@ -45,7 +45,12 @@ from intent_analyst.evaluation import (
 )
 from intent_analyst.pricing import PRICES
 from intent_analyst.prompts import LATEST_NAME, LEGACY_NAME, PROMPTS, get
-from intent_analyst.questions import QUESTIONS_PATH, Question, load_questions
+from intent_analyst.questions import (
+    QUESTIONS_PATH,
+    Question,
+    load_heldout_questions,
+    load_questions,
+)
 from intent_analyst.recording import ReplayMismatch, SecretInRecording, recording
 from intent_analyst.report import build_report, write_report
 from intent_analyst.review import build_reviews, load_reviews, with_verdicts, write_reviews
@@ -137,6 +142,11 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--per-block", type=int, help="stratified sample: this many per block")
     p.add_argument("--count", type=int, help="run at most this many questions, spread over blocks")
     p.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
+    p.add_argument(
+        "--heldout",
+        action="store_true",
+        help="also run the held-out questions (data/eval/heldout_questions.json): 92 plus 20",
+    )
     p.add_argument("--record-dir", type=Path, help="where the recordings go (default: by run id)")
     p.add_argument("--replay", type=Path, metavar="DIR", help="replay the recordings in DIR")
     p.add_argument("--rescore", type=Path, metavar="REPORT", help="score a past run again")
@@ -201,6 +211,8 @@ def main(
         if args.total_usd <= 0 or args.question_usd <= 0:
             raise InvalidOperation
         questions = load_questions(args.questions)
+        if args.heldout:
+            questions += load_heldout_questions()
         if replaying:
             questions = [q for q in questions if (args.replay / f"{q.id}.json").is_file()]
             if not questions:

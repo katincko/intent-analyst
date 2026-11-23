@@ -187,6 +187,18 @@ def test_the_rehearsal_needs_no_key_and_stays_under_the_cap(model: str, sample: 
     assert 0 < spent <= CAP
 
 
+def test_the_rehearsal_covers_the_92_questions_and_with_the_flag_the_112() -> None:
+    """E6: the held-out 20 are an option of the same command; the stand-in has no network (and
+    the conftest guard fails any socket)."""
+    code, out, err = run_main(["--dry-run"], {})
+    assert (code, err) == (0, "") and "questions selected: 92\n" in out
+    code, out, err = run_main(["--dry-run", "--heldout"], {})
+    assert (code, err) == (0, "") and "questions selected: 112\n" in out
+    assert "most the run can cost: $2.00" in out  # the ceiling is shown before anything runs
+    ids = [q.id for q in load_questions()]
+    assert len(ids) == 92 and not any(i.startswith("heldout-") for i in ids)
+
+
 def test_the_plan_states_the_most_the_run_can_cost() -> None:
     limits = Limits()
     assert "most the run can cost: $2.00" in plan_lines(SONNET, limits, CAP, QUESTIONS)
