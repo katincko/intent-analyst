@@ -152,7 +152,10 @@ def _same_params(
         if name == "limit" and "limit" not in question.expect.params:
             continue
         if name == "name_contains" and wanted in TEXT_FILTERS:
-            if items_selected(con, wanted, actual[name]) != items_selected(con, wanted, value):
+            wanted_items = items_selected(con, wanted, value)
+            # an expected filter that selects nothing is a broken question file (test_questions):
+            # two empty selections would be equal and "qqqq" would match "zzzz"
+            if not wanted_items or items_selected(con, wanted, actual[name]) != wanted_items:
                 return False
         elif actual[name] != value:
             return False

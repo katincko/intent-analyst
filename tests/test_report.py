@@ -593,6 +593,15 @@ def test_a_text_filter_is_right_only_when_it_selects_the_items_the_expected_one_
     assert not scored(con, expect, {})  # no filter selects everything
 
 
+def test_an_expected_filter_that_selects_nothing_is_never_matched(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Two filters that select nothing would compare equal: "qqqq" would match "zzzz"."""
+    for expected in ("qqqq", "zzzz"):
+        for actual in ("qqqq", "zzzz", "insulin"):
+            assert not scored(con, {"name_contains": expected}, {"name_contains": actual})
+
+
 def test_a_filter_that_selects_too_much_is_wrong_however_short(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
