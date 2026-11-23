@@ -5,7 +5,7 @@ from typing import Any
 
 import duckdb
 
-from intent_analyst.catalog import assemble
+from intent_analyst.catalog import TEXT_FILTERS, assemble, name_filter
 
 # One definition per table: the CSV columns kept and the name and type they get in the database.
 # Direct identifiers in the CSV (SSN, address, passport...) are deliberately never loaded.
@@ -110,3 +110,15 @@ def run_intent(
     """The one entry point for answering: validate, assemble, run."""
     query = assemble(name, raw_params)
     return run_sql(con, query.sql, query.params)
+
+
+def items_selected(
+    con: duckdb.DuckDBPyConnection, intent: str, name_contains: str | None
+) -> frozenset[str]:
+    """The distinct names the `name_contains` filter of `intent` keeps (all of them for None)."""
+    table, column = TEXT_FILTERS[intent]
+    rows = con.execute(
+        f"SELECT DISTINCT {column} FROM {table} WHERE {name_filter(column)}",  # noqa: S608
+        {"name_contains": name_contains},
+    ).fetchall()
+    return frozenset(row[0] for row in rows)

@@ -272,6 +272,15 @@ def main(
             except ReplayMismatch as error:
                 print(f"Stopped: {error}", file=err)
                 return 1
+            seconds = past["total_seconds"] if past else time.monotonic() - started
+            # scored here: a text filter is compared by the items it selects in the database
+            report = (
+                None
+                if args.dry_run  # a rehearsal has no answers worth a report
+                else build_report(
+                    run, run_id, past["date"] if past else f"{now():%Y-%m-%d}", seconds, con
+                )
+            )
         finally:
             con.close()
     if args.dry_run:
@@ -280,11 +289,9 @@ def main(
         label = f"replay of {directory}"
     else:
         label = f"real run, recordings in {directory}"
-    seconds = past["total_seconds"] if past else time.monotonic() - started
     print(f"{label}, {seconds:.1f} s", file=out)
     print("\n".join(_summary(run)), file=out)
-    if not args.dry_run:  # a rehearsal has no answers worth a report
-        report = build_report(run, run_id, past["date"] if past else f"{now():%Y-%m-%d}", seconds)
+    if report is not None:
         review_dir = args.review_dir or REVIEWS
         existing = review_dir / f"{run_id}.json"
         if past and existing.is_file():  # a person's verdicts are never thrown away

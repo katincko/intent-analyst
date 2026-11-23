@@ -43,7 +43,7 @@ def replayed(con: duckdb.DuckDBPyConnection, qid: str) -> tuple[Outcome, Questio
         outcome = ask(
             question.question, client=client, con=con, model="claude-haiku-5-5", prompt=get("v1")
         )
-    return outcome, record_of(question, outcome)
+    return outcome, record_of(question, outcome, con)
 
 
 @pytest.mark.parametrize(("qid", "marker"), list(FLAGGED.items()))

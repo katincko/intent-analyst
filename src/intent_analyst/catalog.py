@@ -174,6 +174,20 @@ class PatientEncounters(Params):
     limit: Limit = 20
 
 
+def name_filter(column: str) -> str:
+    """The one SQL condition of the `name_contains` parameter, for the intents and for the scoring
+    of what a filter selects (`db.items_selected`)."""
+    return f"($name_contains IS NULL OR contains(lower({column}), lower($name_contains)))"
+
+
+# Intent -> (table, column) the `name_contains` filter reads. Scoring compares the items a filter
+# selects there, not its text (report.py). A test checks it holds every intent with the parameter.
+TEXT_FILTERS: dict[str, tuple[str, str]] = {
+    "top_conditions": ("conditions", "description"),
+    "top_medications": ("medications", "description"),
+}
+
+
 @dataclass(frozen=True)
 class Intent:
     name: str
@@ -214,9 +228,10 @@ INTENTS: dict[str, Intent] = {
             "Most common diagnoses (SNOMED disorders by default; findings and situations are "
             "separate categories), optionally filtered by a word in the condition name.",
             TopConditions,
-            "SELECT c.description AS condition, count(DISTINCT c.patient) AS patients, "
+            "SELECT c.description AS condition, count(DISTINCT c.patient) AS patients, "  # noqa: S608
             "count(*) AS occurrences FROM conditions c WHERE {category} AND "
-            "($name_contains IS NULL OR contains(lower(c.description), lower($name_contains))) "
+            + name_filter("c.description")
+            + " "
             "GROUP BY 1 ORDER BY {order_by} {direction}, condition LIMIT $limit",
             {"conditions": ["description", "patient"]},
             "What are the 5 most common diagnoses (disorders)?",
@@ -270,10 +285,9 @@ INTENTS: dict[str, Intent] = {
             "top_medications",
             "Most prescribed medications, optionally filtered by a word in the medication name.",
             TopMedications,
-            "SELECT m.description AS medication, count(*) AS prescriptions, "
+            "SELECT m.description AS medication, count(*) AS prescriptions, "  # noqa: S608
             "count(DISTINCT m.patient) AS patients, round(sum(m.total_cost), 2) AS total_cost "
-            "FROM medications m WHERE "
-            "($name_contains IS NULL OR contains(lower(m.description), lower($name_contains))) "
+            "FROM medications m WHERE " + name_filter("m.description") + " "
             "GROUP BY 1 ORDER BY {order_by} {direction}, medication LIMIT $limit",
             {"medications": ["description", "patient", "total_cost"]},
             "Which medications are prescribed most often?",
@@ -283,7 +297,7 @@ INTENTS: dict[str, Intent] = {
             "medications_for_condition",
             "Medications prescribed for one exact condition (the recorded reason).",
             MedicationsForCondition,
-            "SELECT m.description AS medication, count(*) AS prescriptions, "
+            "SELECT m.description AS medication, count(*) AS prescriptions, "  # noqa: S608
             "count(DISTINCT m.patient) AS patients FROM medications m "
             "WHERE m.reason_description = $reason GROUP BY 1 "
             "ORDER BY prescriptions DESC, medication LIMIT $limit",

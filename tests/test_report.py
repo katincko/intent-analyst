@@ -6,6 +6,7 @@ refer to questions that exist.
 import hashlib
 import io
 import json
+from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import pytest
 from fake_api import FakeMessagesApi, Reply, message, tool_use, usage
 
 from intent_analyst.agent import Limits, Outcome, ask
+from intent_analyst.catalog import INTENTS, TEXT_FILTERS, name_filter
 from intent_analyst.evaluation import run_evaluation
 from intent_analyst.pricing import PRICE_TABLE_VERSION
 from intent_analyst.prompts import get
@@ -120,7 +122,7 @@ def make_run(con: duckdb.DuckDBPyConnection) -> tuple[Report, list[Outcome]]:
     run = run_evaluation(
         QUESTIONS, ask_one, model=MODEL, limits=Limits(), total_cap=Decimal(2), prompt_version="v2"
     )
-    return build_report(run, f"20261027T000000Z-{MODEL}", "2026-10-27", 12.5), outcomes
+    return build_report(run, f"20261027T000000Z-{MODEL}", "2026-10-27", 12.5, con), outcomes
 
 
 # ---- scoring ----
@@ -153,7 +155,7 @@ def test_an_intent_that_failed_does_not_count(con: duckdb.DuckDBPyConnection) ->
     ]
     api = FakeMessagesApi(script)
     outcome = ask("Q?", client=api.client(), con=con, model=MODEL, clock=api.clock)
-    record = record_of(q, outcome)
+    record = record_of(q, outcome, con)
     assert (record.intent_ok, record.params_ok, record.correct) == (False, False, False)
 
 
@@ -211,7 +213,7 @@ def test_cache_tokens_are_reported_per_question(con: duckdb.DuckDBPyConnection) 
     q = outcome_question("out_of_scope-01", "out_of_scope", "refused")
     api = FakeMessagesApi([cached])
     outcome = ask("Q?", client=api.client(), con=con, model=MODEL, clock=api.clock)
-    assert record_of(q, outcome).cache_read_tokens == 1100
+    assert record_of(q, outcome, con).cache_read_tokens == 1100
 
 
 # ---- the files ----
@@ -261,7 +263,7 @@ def real(qid: str) -> Question:
 
 
 def flags_of(con: duckdb.DuckDBPyConnection, qid: str, replies: list[Reply]) -> list[InjectionFlag]:
-    record = record_of(real(qid), outcome_of(con, replies))
+    record = record_of(real(qid), outcome_of(con, replies), con)
     assert not record.correct and record.human_verdict is None  # the program gives no verdict
     assert final_state(record) == "review"  # flagged or not, a person decides
     return record.flags
@@ -419,7 +421,7 @@ def run_scripts(
     run = run_evaluation(
         questions, ask_one, model=MODEL, limits=Limits(), total_cap=Decimal(2), prompt_version="v2"
     )
-    report = build_report(run, f"20261027T000000Z-{MODEL}", "2026-10-27", 1.0)
+    report = build_report(run, f"20261027T000000Z-{MODEL}", "2026-10-27", 1.0, con)
     return report, build_reviews(run, report.run_id, report)
 
 
@@ -564,3 +566,83 @@ def test_every_real_injection_question_waits_for_a_person_with_a_clean_refusal(
     for q in load_questions():
         if q.block == "injection":
             assert flagged(con, q.id, [refuse("Not allowed.")]) is False, q.id
+
+
+# ---- X3 and X4: what a parameter must match ----
+
+
+def scored(
+    con: duckdb.DuckDBPyConnection, expect: Mapping[str, object], params: Mapping[str, object]
+) -> bool:
+    """Whether a top_medications answer with `params` is scored as having the expected params."""
+    question = intent_question("top_medications-99", "top_medications", dict(expect))
+    outcome = outcome_of(con, [run_intent("top_medications", dict(params)), ANSWER])
+    return record_of(question, outcome, con).params_ok is True
+
+
+def test_a_text_filter_is_right_only_when_it_selects_the_items_the_expected_one_selects(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """X3. "lisinopril 10 MG" selects one drug; the bare word also brings the 5 MG one."""
+    expect = {"name_contains": "lisinopril 10 MG"}
+    assert scored(con, expect, {"name_contains": "lisinopril 10 MG"})
+    assert scored(con, expect, {"name_contains": "LISINOPRIL 10 mg"})  # case never changes a match
+    assert scored(con, expect, {"name_contains": "lisinopril 10"})  # another text, the same items
+    assert not scored(con, expect, {"name_contains": "lisinopril"})  # the 5 MG one is extra
+    assert not scored(con, expect, {"name_contains": "lisinopril 5 MG"})  # other items
+    assert not scored(con, expect, {})  # no filter selects everything
+
+
+def test_a_filter_that_selects_too_much_is_wrong_however_short(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    expect = {"name_contains": "insulin"}
+    assert scored(con, expect, {"name_contains": "insulin"})
+    for short in ("oral", "e", "in", "i"):
+        assert not scored(con, expect, {"name_contains": short}), short
+
+
+def test_a_condition_filter_is_read_in_the_conditions_table(con: duckdb.DuckDBPyConnection) -> None:
+    question = intent_question(
+        "top_conditions-99", "top_conditions", {"name_contains": "sinusitis"}
+    )
+
+    def ok(filter_: str) -> bool:
+        reply = run_intent("top_conditions", {"name_contains": filter_})
+        return record_of(question, outcome_of(con, [reply, ANSWER]), con).params_ok is True
+
+    assert ok("sinusitis") and ok("SINUSITIS")
+    assert not ok("itis") and not ok("viral")  # more items, and other items
+
+
+def test_a_parameter_the_question_does_not_cite_is_compared_at_its_catalog_default(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """X4. "the 5 least prescribed" answered with the 5 most prescribed used to pass."""
+    expect = {"limit": 5}
+    assert scored(con, expect, {"limit": 5})
+    assert scored(con, expect, {"limit": 5, "direction": "desc", "order_by": "prescriptions"})
+    assert not scored(con, expect, {"limit": 5, "direction": "asc"})
+    assert not scored(con, expect, {"limit": 5, "order_by": "total_cost"})
+
+
+def test_the_limit_is_compared_only_when_the_question_cites_a_quantity(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    assert not scored(con, {"limit": 5}, {"limit": 3})
+    assert not scored(con, {"limit": 5}, {})  # the default 10 is not 5
+    assert scored(con, {"name_contains": "insulin"}, {"name_contains": "insulin", "limit": 3})
+    assert scored(con, {"name_contains": "insulin"}, {"name_contains": "insulin"})
+    # the other parameters are still compared
+    assert not scored(
+        con, {"name_contains": "insulin"}, {"name_contains": "insulin", "direction": "asc"}
+    )
+
+
+def test_every_intent_with_a_text_filter_is_listed_with_the_column_its_sql_reads() -> None:
+    """The scoring reads the items a filter selects from TEXT_FILTERS: it must hold every intent
+    that has `name_contains`, and the one SQL condition of the filter must be in its query."""
+    with_filter = {n for n, i in INTENTS.items() if "name_contains" in i.params.model_fields}
+    assert with_filter == set(TEXT_FILTERS)
+    for name, (table, column) in TEXT_FILTERS.items():
+        assert name_filter(f"{table[0]}.{column}") in INTENTS[name].sql  # aliased c and m
