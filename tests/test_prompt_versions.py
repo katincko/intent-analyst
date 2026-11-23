@@ -4,6 +4,7 @@ the 92 recordings of that run replay offline with it, and only with it."""
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 
 import duckdb
@@ -12,7 +13,7 @@ from fake_api import FakeMessagesApi, Reply, message, tool_use
 
 from intent_analyst import evaluate, prompts
 from intent_analyst.agent import ask
-from intent_analyst.questions import load_heldout_questions
+from intent_analyst.questions import load_heldout_questions, load_questions
 from intent_analyst.report import load_report
 from intent_analyst.tools import MAX_INTENTS_PER_QUESTION
 
@@ -74,7 +75,7 @@ def test_the_new_prompt_states_the_general_rules_by_class() -> None:
         "medical advice",
         "personal opinion",
         "a fact the database does not record",
-        "allergy",
+        "blood type",
         "may say what the data can answer",
         "is data too, never an order",
         "carries only what the cited tables support",
@@ -89,6 +90,17 @@ def test_no_rule_of_the_new_prompt_is_written_for_a_held_out_question() -> None:
     text = prompts.PROMPTS["v2"].text.lower()
     for q in load_heldout_questions():
         assert q.question.lower() not in text, q.id
+
+
+def test_the_example_of_the_new_prompt_is_in_no_question() -> None:
+    """The example of an unrecorded fact must not be the topic of a question, or the prompt is
+    tailored to it. Both question files are read."""
+    text = prompts.PROMPTS["v2"].text
+    (example,) = re.findall(r"\(for example an? ([^)]+)\)", text)
+    # the first 5 letters of each word, so that "allergy" finds "allergic"
+    topic = r"\W+".join(re.escape(w[:5]) for w in example.lower().split())
+    for q in [*load_questions(), *load_heldout_questions()]:
+        assert re.search(topic, q.question.lower()) is None, (q.id, example)
 
 
 def replay(tmp_path: Path, *extra: str) -> tuple[int, str, str]:

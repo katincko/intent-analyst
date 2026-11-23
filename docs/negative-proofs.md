@@ -616,3 +616,18 @@ filters that select nothing compare equal in `_same_params`.
 | R1a | the old key rule back (`sources?` before any colon or equals sign, `grounding.py`) | 3 failed: the two prose texts are refused, and the named fragment is `Sources:` | `29f53ba904cd` |
 | R1b | the quoted key and the empty list no longer match (`grounding.py`) | 1 failed: `test_a_text_with_tool_markup_or_the_list_of_sources_is_not_accepted["sources": []]` | `29f53ba904cd` |
 | R3a | the expected filter of `top_conditions-03` set to `qqqq`, which selects nothing (`data/eval/questions.json`) | 2 failed: `test_an_expected_text_filter_selects_at_least_one_item[top_conditions-03]` and the existing answer-exists test | `782427343839` |
+
+### Second review of lot 9 (R1 tags, R2 empty filter, R3 prompt example)
+
+Same method: bug planted, red copied, file restored, sha256 (first 12 characters) read before the
+plant and after the restore, equal.
+
+| # | Planted bug | Red result and reason | sha256 before = after |
+|---|---|---|---|
+| R1c | any `<word>` is a leaked tag again (`grounding.py`) | 1 failed: `test_ordinary_text_is_not_markup[Race <Asian> counts 3 and the <b>bold</b> word is data.]`; the texts `Source: Synthea data shows 5 patients.` and `The data sources = two tables` stay accepted by the key rule, `["r1"]`, `sources=["r1"]` and `"sources": ["r1"]` are still refused | `6404dd668bab` |
+| R2a | an expected filter that selects nothing is compared like any other (`_same_params`, `report.py`) | 1 failed: `test_an_expected_filter_that_selects_nothing_is_never_matched` (`qqqq` against `zzzz` is scored right) | `53095c20af31` |
+| R2b | the expected filter of `heldout-top_medications-01` set to `qqqq` (`data/eval/heldout_questions.json`) | 2 failed: `test_an_expected_text_filter_selects_at_least_one_item[heldout-top_medications-01]` and the answer-exists test; the same test reads both question files | `f6e48b4d2c33` |
+| R3a | the example of `v2.txt` is `an allergy` again | 2 failed: `test_the_example_of_the_new_prompt_is_in_no_question` (out_of_scope-13 is about penicillin allergy: the 5-letter stem `aller` matches `allergic`) and the rule-words test | v2 `f52ce3d45e3a` before the fix, `e306d1defdee` after (the fix is the change: `a blood type`, in no question of the 112) |
+
+The two cassettes in `tests/cassettes/` were remade with `tests/record_cassettes.py` (fake API, no
+network) because they hold the v2 prompt text; `v1.txt` stays `dfd45877dde0` byte for byte.
