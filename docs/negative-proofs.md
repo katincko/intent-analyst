@@ -502,6 +502,25 @@ every time. The question set `data/eval/heldout_questions.json` was not used to 
 | X1c | the leak is read only when the numbers are already fine (`agent.py`) | 5 failed: the markup texts that also carry a number, and the real case | `c5fcd32f4d2b` |
 | X2a | a refusal is exempt from the forbidden text check again (`report.py`) | 4 failed: `test_a_refusal_that_repeats_the_forbidden_text_is_flagged_and_still_waits_for_a_person`, `test_a_disguised_marker_is_still_found_when_the_squash_undoes_it`, the real injection-05 refusal and the rescore that must match the committed report | `ab9e21949db8` |
 | X2b | a flag reads as `obeyed` when no person wrote a verdict (`final_state`, `report.py`), the alert turned into a verdict | 14 failed: every flag test (the program must give no verdict) | `ab9e21949db8` |
+| X3a | a text filter compared by its text, not by the items it selects (`_same_params`, `report.py`) | 2 failed in `tests/test_report.py`: `test_a_text_filter_is_right_only_when_it_selects_the_items_the_expected_one_selects` (`LISINOPRIL 10 mg` and `lisinopril 10` are right) and `test_a_condition_filter_is_read_in_the_conditions_table` (`SINUSITIS`) | `86ff7391d5b6` |
+| X3b | the items of a filter taken as if there were no filter (`items_selected`, `db.py`) | 3 failed: the lisinopril case (bare `lisinopril` brings the 5 MG one), `test_a_filter_that_selects_too_much_is_wrong_however_short` (`oral`, `e`, `in`, `i`) and the conditions case | `cb77a23d6cf9` |
+| X3c | a wrong column in `TEXT_FILTERS` (`catalog.py`) | 5 failed: the 4 filter tests (the query reads a column that does not exist) and `test_every_intent_with_a_text_filter_is_listed_with_the_column_its_sql_reads` | `dabf75c0cd33` |
+| X4a | the old rule back: only the parameters the question file names are compared (`_same_params`, `report.py`) | 2 failed: `test_a_parameter_the_question_does_not_cite_is_compared_at_its_catalog_default` ("the 5 least prescribed" answered with the 5 most prescribed passes) and `test_the_limit_is_compared_only_when_the_question_cites_a_quantity` | `86ff7391d5b6` |
+| X4b | the limit is always compared, even when the question names no quantity | 1 failed: `test_the_limit_is_compared_only_when_the_question_cites_a_quantity` (`insulin` with limit 3 is wrong) | `86ff7391d5b6` |
+| X4c | the limit is never compared | 1 failed: the same test (limit 3 for "the 5" is right) | `86ff7391d5b6` |
+| X5a | the page takes every report, newest first (`latest_run_id`, `page.py`) | 2 failed in `tests/test_page.py`: the held-out-only run later than the main run takes the page, and no error without a main run | `14fda6a4bfc5` |
+| X5b | the report is chosen by a test that is always true (`page.py`) | the same 2 failed | `14fda6a4bfc5` |
+| X5c | the oldest run instead of the latest (`runs[0]`, `page.py`) | 1 failed: the latest run of the main set is expected | `14fda6a4bfc5` |
+| E6a | `--heldout` does nothing (`evaluate.py`) | 1 failed: `test_the_rehearsal_covers_the_92_questions_and_with_the_flag_the_112` (92 selected, not 112) | `41f908bae26e` |
+| E6b | `--heldout` adds 19 of the 20 | the same test failed (111 selected) | `41f908bae26e` |
+
+Rescore of the run of 2026-10-28 with the new rules (X3, X4), no network: the report and the
+markdown are byte for byte the committed ones (`diff` empty), so no intent question changed its
+result: the same questions stay wrong and no right one turned wrong, because the model sent the
+defaults and the filters of the question files in every right answer. The new rules are tested on
+scripted answers, not on that run. `uv run python -m intent_analyst.page`
+twice: `0287c662c91a...` both times, the sha256 of `docs/index.html` (X5).
+
 
 
 ## Static page (`tests/test_page.py`)

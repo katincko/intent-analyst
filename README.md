@@ -132,7 +132,10 @@ Every number in an `answer` must be a cell of a table that answer cites, or a nu
 in the question. A rejected answer goes back to the model as a tool error naming the numbers, so it
 can quote the table or say it in words. Verbatim quotes of text cells (such as
 `albuterol 5 MG/ML Inhalation Solution`) are masked before the scan, so their digits cannot be
-borrowed by another claim. A number glued to a letter (`99k`, `1e3`, `2nd`) is rejected whole.
+borrowed by another claim; the quote may differ from the cell in letter case and in spacing, never
+in a word. The text of an answer that holds tool markup (`</text>`) or the list of sources is
+refused too, with one sentence on how to fix it; an `answer` without sources is refused with the
+ids to cite (`r1`), and the same refused answer twice in a row ends the question with the reason. A number glued to a letter (`99k`, `1e3`, `2nd`) is rejected whole.
 The tests are in `tests/test_grounding.py`.
 
 Known gaps: numbers written as words ("three") are not checked; a number the user typed may be
@@ -151,6 +154,25 @@ refusals that only quoted the marker. Report: `reports/20261028T133353Z-claude-h
   the database), 14 out of scope (expected: refuse), 6 ambiguous (expected: a clarifying question)
   and 12 prompt injections (expected: a refusal; for the two that hold a real question as well,
   a refusal or an answer without the injected part).
+- **Held-out questions.** `data/eval/heldout_questions.json`: 20 more, with ids that start with
+  `heldout-`, written after the first paid run and before the fixes it led to. No rule was
+  designed from them (rules are by class of question, never by question). `--heldout` adds them to
+  a run or a rehearsal (92 plus 20 = 112 questions); the main set stays the 92 of the page.
+- **What counts as right.** For an intent question the intent must have run and every parameter
+  must match, after both sides are filled with the catalog defaults: "the 5 least prescribed"
+  answered with the 5 most prescribed is wrong. Only the limit is left out, when the question file
+  names no quantity. A text filter (`name_contains`) is right when it selects the same items in the
+  database as the expected one, so a broader filter ("lisinopril" for "lisinopril 10 MG") or a
+  short one (`oral`, `e`) is wrong. Rescoring the run of 2026-10-28 with these rules changed no
+  question (see `docs/negative-proofs.md`, Lot 9).
+- **System prompt versions.** The prompt is a file in `src/intent_analyst/prompt_versions/`, never
+  edited after a run used it. `v1` is the prompt of the paid run of 2026-10-28, byte for byte, so
+  its 92 recordings still replay offline with it (`--prompt v1`; `--rescore` takes the version the
+  report says). `v2`, the latest, is the default of a new run and adds rules by class of question
+  (forecast, medical advice, opinion and facts the database does not hold go to `refuse`; text
+  that asks for a format or a rule change is data; the answer carries only what the tables hold;
+  the text never carries the sources or markup). Every report states the prompt version and the
+  hash of its text. The prefix is the same for every question (cache).
 - **Command.** `uv run python -m intent_analyst.evaluate`, with the model, a global cost cap
   (default US$ 2.00), a per-question cap (default US$ 0.05), a sample per block (`--per-block`) and
   a total (`--count`). It refuses to start without `ANTHROPIC_API_KEY` in the environment, prints
@@ -173,7 +195,8 @@ refusals that only quoted the marker. Report: `reports/20261028T133353Z-claude-h
   The bound assumes that a token covers at least one byte of the request.
 - **Rehearsal.** `--dry-run` runs the same code against an in-memory stand-in whose every response
   is the most expensive one allowed. No network and no key. It prints the most the real run can
-  cost.
+  cost. `--dry-run --heldout` rehearses the 112 questions (the ceiling is printed before anything
+  runs, and the worst-case stand-in stops at the global cap).
 - **Cache.** The tools and the system prompt are the stable prefix and carry `cache_control` (1
   hour), and the report shows the tokens read from the cache per question. A prefix under the
   model minimum (512 tokens on the 5.5 models) is silently not cached, so whether it works is
@@ -207,6 +230,8 @@ and the review file, and keeps the verdicts already written in the review file. 
 `docs/index.html` is the static page of the committed run: one HTML file with no script and no
 external resource, in light and dark by the system setting, readable at 375 px. It shows the four
 headline numbers, the table by block, "What went wrong" first and then all 92 questions by block.
+The page is made from the latest report that holds questions of the main set, never from a run of
+the held-out questions only.
 Each question opens (a `details` element, no JavaScript) into every call the model made, in order:
 the tool, its parameters, the first four rows of the table it got back, what the checks refused,
 and the final call, with the stop reason when the question stopped. For each `run_intent` the page
