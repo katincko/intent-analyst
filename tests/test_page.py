@@ -18,9 +18,11 @@ from intent_analyst.page import (
     build_page,
     esc,
     highlight,
+    latest_run_id,
     load_steps,
     main,
 )
+from intent_analyst.questions import load_questions
 from intent_analyst.report import QuestionRecord
 from intent_analyst.review import load_reviews
 
@@ -124,6 +126,53 @@ def test_two_runs_of_the_command_write_the_same_bytes(tmp_path: Path) -> None:
     assert main(["--out", str(a)]) == 0
     assert main(["--out", str(b)]) == 0
     assert a.read_bytes() == b.read_bytes()
+
+
+def _reports_dir(base: Path, runs: dict[str, list[str]]) -> Path:
+    """A reports directory: each run id is the committed report cut to those question ids."""
+    reports = base / "reports"
+    reports.mkdir()
+    committed = json.loads((ROOT / "reports" / f"{RUN}.json").read_text(encoding="utf-8"))
+    for run_id, ids in runs.items():
+        data = json.loads(json.dumps(committed))
+        data["run_id"] = run_id
+        data["questions"] = [q for q in data["questions"] if q["id"] in ids] or [
+            {**committed["questions"][0], "id": ids[0]}
+        ]
+        (reports / f"{run_id}.json").write_text(json.dumps(data), encoding="utf-8")
+    return reports
+
+
+def test_the_page_is_made_from_the_latest_run_of_the_main_set_never_from_the_new_questions_only(
+    tmp_path: Path,
+) -> None:
+    """X5. A run of the held-out questions later than the main run must not take the page."""
+    main_ids = [q.id for q in load_questions()]
+    reports = _reports_dir(
+        tmp_path,
+        {
+            "20261001T000000Z-a": main_ids[:3],
+            "20261101T000000Z-b": main_ids,
+            "20261201T000000Z-heldout-only": ["heldout-count_patients-01"],
+        },
+    )
+    assert latest_run_id(reports) == "20261101T000000Z-b"
+    # a run of the main set and the new questions together does hold the main set
+    (reports / "20261202T000000Z-mixed.json").write_text(
+        (reports / "20261101T000000Z-b.json")
+        .read_text(encoding="utf-8")
+        .replace("20261101T000000Z-b", "20261202T000000Z-mixed"),
+        encoding="utf-8",
+    )
+    assert latest_run_id(reports) == "20261202T000000Z-mixed"
+
+
+def test_with_no_run_of_the_main_set_there_is_no_page(tmp_path: Path) -> None:
+    reports = _reports_dir(
+        tmp_path, {"20261201T000000Z-heldout-only": ["heldout-count_patients-01"]}
+    )
+    with pytest.raises(FileNotFoundError, match="main set"):
+        latest_run_id(reports)
 
 
 def test_the_committed_page_is_what_the_generator_writes(fresh_page: str) -> None:

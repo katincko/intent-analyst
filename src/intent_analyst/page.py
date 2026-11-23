@@ -688,9 +688,14 @@ def _id_key(q: QuestionRecord) -> tuple[str, int]:
 
 
 def latest_run_id(reports: Path) -> str:
-    runs = sorted(p.stem for p in reports.glob("*.json"))
+    """The latest run that holds questions of the main set. A run of the held-out questions only
+    (written later, but not the evaluation the page shows) never takes the page."""
+    main = {q.id for q in load_questions()}
+    runs = sorted(
+        p.stem for p in reports.glob("*.json") if main & {q.id for q in load_report(p).questions}
+    )
     if not runs:
-        raise FileNotFoundError(f"no report in {reports}")
+        raise FileNotFoundError(f"no report of the main set in {reports}")
     return runs[-1]
 
 
