@@ -180,6 +180,7 @@ def test_the_same_numbers_refusal_twice_in_a_row_ends_the_question(
         '27 patients are M.\n<parameter name="sources">["r1"]</parameter>',
         "27 patients are M. Sources: r1",
         'sources = ["r1"]',
+        '27 patients are M. "sources": []',
         "27 patients are M. [r1]",
         '27 patients are M. <invoke name="answer">',
     ],
@@ -212,7 +213,7 @@ def test_the_leak_is_checked_before_the_numbers(con: duckdb.DuckDBPyConnection) 
     [
         ("done</text>", "</text>"),
         ('<parameter name="sources">', '<parameter name="sources">'),
-        ("Sources: r1, r2", "Sources:"),
+        ("Sources: r1, r2", "Sources: r1"),
         ('["r2"]', '["r2'),
     ],
 )
@@ -224,6 +225,8 @@ def test_leaked_markup_names_the_fragment(text: str, found: str) -> None:
     "text",
     [
         "Age < 5 and > 3 years.",
+        "Source: Synthea data shows 5 patients.",
+        "The data sources = two tables, patients and encounters.",
         "NDA021457 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [ProAir]",
         "Resources: staff, rooms and the sources of the data are described in words.",
         "a < b and b > c",

@@ -31,11 +31,14 @@ Cell = Any
 
 # What the text of an answer must never carry (the model sometimes writes the end of the call in
 # the text field, see patient_encounters-01 of the run of 2026-10-28): a tag such as `</text>` or
-# `<parameter name="sources">`, the word `sources` before a colon or an equals sign, and a list
-# that starts with a result id (`["r2"]`, `[r1`). A bare `<` or `>` and a bracket as in a
-# medication name (`[ProAir]`) are not markup.
+# `<parameter name="sources">`, the word `sources` used as a key (quoted, or followed by a colon
+# or an equals sign and then a result id or a list: `Sources: r1`, `sources = ["r1"]`), and a list
+# that starts with a result id (`["r2"]`, `[r1`). A bare `<` or `>`, a bracket as in a medication
+# name (`[ProAir]`) and the word "source" in prose (`Source: Synthea data`) are not markup.
 _LEAK = re.compile(
-    r"</?[A-Za-z_][\w:.-]*(?:\s[^<>]*)?/?>|\bsources?\b[\"']?\s*[:=]|\[\s*[\"']?r\d+",
+    r"</?[A-Za-z_][\w:.-]*(?:\s[^<>]*)?/?>"
+    r"|\bsources?\b(?:[\"']\s*[:=]|\s*[:=]\s*(?:[\[(\"']*\s*r\d+\b|\[\s*\]))"
+    r"|\[\s*[\"']?r\d+",
     re.IGNORECASE,
 )
 
