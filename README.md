@@ -11,7 +11,10 @@ live evaluation harness are built, and the evaluation ran once against the real 
 (`claude-haiku-5-5`, 92 questions, US$ 0.1062, 93% correct overall; see "The evaluation"). The
 recordings, the report and a human reading of the injection answers are committed, and a script
 turns them into a static page, `docs/index.html` (see "The page"). The tests still use only an
-in-memory fake of the Messages API. This repository is private.
+in-memory fake of the Messages API.
+
+**The page.** Every question of the committed run, with each call the model made:
+https://katincko.github.io/intent-analyst/
 
 ## The problem
 
@@ -250,8 +253,9 @@ uv run python -m intent_analyst.page --run-id <run id> --out <file>
 ```
 
 The output is the same bytes on every run, and `tests/test_page.py` fails when the committed page is
-older than the report or the recordings. The page is not published: it goes online only if the
-repository is made public.
+older than the report or the recordings. GitHub Pages serves the `docs/` folder of `main` at
+https://katincko.github.io/intent-analyst/, so the page online is the committed `docs/index.html`.
+`docs/.nojekyll` tells Pages to serve the files as they are, without Jekyll.
 
 ## Data and privacy
 
