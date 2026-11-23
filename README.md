@@ -2,20 +2,22 @@
 
 intent-analyst is a Claude agent that answers plain English questions about a database without ever writing SQL.
 
-The model only picks from a closed catalog of ten intents (fixed queries) and fills in their
-parameters; the code validates them, builds the SQL with bound parameters, runs it on a read-only
-DuckDB and rejects any answer whose numbers are not in a returned table. Unlike text-to-SQL tools
-such as [Vanna](https://github.com/vanna-ai/vanna), every query the system can run is known and
-reviewable in advance, and the approach is measured: 92 questions against the real API, 93%
-correct, 10 of 12 prompt injections resisted (read by a person).
+**Live demo: https://katincko.github.io/intent-analyst/** (all 92 test questions, with every step
+the model took). Result of the one run against the real API: 93% of answers correct, 10 of 12
+prompt injection attacks resisted.
 
-Who it is for: anyone building a "chat with your data" feature who prefers a fixed, reviewable set
-of queries over free SQL, at the price of refusing questions outside the catalog. The data is
-synthetic patient records ([Synthea](https://github.com/synthetichealth/synthea)); this is an
-independent reimplementation, with no employer code or data.
+[![CI](https://github.com/katincko/intent-analyst/actions/workflows/ci.yml/badge.svg)](https://github.com/katincko/intent-analyst/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**See it run: https://katincko.github.io/intent-analyst/** (every question of the evaluation, with
-each call the model made).
+How it works:
+
+- **The model picks, it does not write.** It chooses one of ten ready-made queries
+  ([the catalog](CATALOG.md)) and fills in values such as a condition name or a sort order.
+- **The code runs the query.** It checks the values, builds the SQL and runs it on a database
+  that can only be read.
+- **No invented numbers.** An answer that contains a number not found in a returned table is
+  rejected.
+- **Outside the catalog, it says no.** A question none of the ten queries can answer is refused.
 
 ```
 question:  How many patients do we have of each race?
@@ -24,8 +26,21 @@ answer:    Patients by race: white 42, black 6, asian 4, native 1.
 cost:      US$ 0.0012, 3.5 s (claude-haiku-5-5, run of 2026-10-28)
 ```
 
-[![CI](https://github.com/katincko/intent-analyst/actions/workflows/ci.yml/badge.svg)](https://github.com/katincko/intent-analyst/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+Try it locally with [uv](https://docs.astral.sh/uv/): `uv sync --locked` then `make verify` (no API
+key needed). The live evaluation needs `ANTHROPIC_API_KEY`; `uv run python -m
+intent_analyst.evaluate --dry-run` prints its maximum cost first (see [How to run](#how-to-run)).
+
+What the numbers mean: a question counts as correct when the agent ran the expected query with the
+expected values, refused an out of scope question, or asked back on an ambiguous one. The 12
+injection answers were judged by a person; in the 2 that failed, the model added the attacker's
+marker to a real answer. Full report:
+[`reports/20261028T133353Z-claude-haiku-5-5.md`](reports/20261028T133353Z-claude-haiku-5-5.md).
+
+Who it is for: anyone building a "chat with your data" feature who wants every query the system
+can run to be known and reviewable in advance, unlike text-to-SQL tools such as
+[Vanna](https://github.com/vanna-ai/vanna). The data is synthetic patient records
+([Synthea](https://github.com/synthetichealth/synthea)). A personal project, written from scratch,
+with no employer code or data.
 
 Contents: [The problem](#the-problem) · [The solution](#the-solution) ·
 [Decisions](#decisions-and-trade-offs) · [The evaluation](#the-evaluation) · [The page](#the-page) ·
